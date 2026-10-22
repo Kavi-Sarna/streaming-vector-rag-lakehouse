@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Lint, test, and Compose smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go/go.mod
+
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL -o /tmp/golangci-lint.tar.gz \
+            https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-linux-amd64.tar.gz
+          echo "9b7fe6a6bf6334b98decf8d86b11415ea7889afdabdd1959fdce23af2a9ebcea  /tmp/golangci-lint.tar.gz" | sha256sum -c -
+          tar -C /tmp -xzf /tmp/golangci-lint.tar.gz
+          sudo mv /tmp/golangci-lint-2.15.0-linux-amd64/golangci-lint /usr/local/bin/golangci-lint
+
+      - name: Install Buf
+        uses: bufbuild/buf-action@v1
+        with:
+          version: "1.75.0"
+          setup_only: true
+          lint: false
+          format: false
+          breaking: false
+          push: false
+          archive: false
+
+      # One command. Reproduce a failure locally with `make ci`.
+      # REQUIRE_DOCKER makes the Compose smoke a hard failure here. Locally
+      # the script skips it with a warning when no daemon is running.
+      - name: Run CI contract
+        run: ./ci/run.sh
+        env:
+          REQUIRE_DOCKER: "1"
