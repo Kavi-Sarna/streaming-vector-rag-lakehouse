@@ -98,6 +98,9 @@ data "aws_iam_policy_document" "github_deploy" {
       "glue:GetSchemaByDefinition",
       "glue:ListSchemas",
       "glue:ListSchemaVersions",
+      "glue:TagResource",
+      "glue:UntagResource",
+      "glue:GetTags",
     ]
     resources = ["*"]
   }
