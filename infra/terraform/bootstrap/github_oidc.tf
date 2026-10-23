@@ -23,16 +23,17 @@ data "aws_iam_policy_document" "github_trust" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # pull_request lets a same-repo PR read and plan.
+    # Repositories created after 2026-07-15 send owner and repository ids
+    # in the subject. pull_request lets a same-repo PR read and plan.
     # The demo environment is the approval gate on apply.
     # main is the ref used when a workflow runs from the default branch.
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${var.github_repository}:pull_request",
-        "repo:${var.github_repository}:environment:demo",
-        "repo:${var.github_repository}:ref:refs/heads/main",
+        "repo:${local.github_subject_repo}:pull_request",
+        "repo:${local.github_subject_repo}:environment:demo",
+        "repo:${local.github_subject_repo}:ref:refs/heads/main",
       ]
     }
   }

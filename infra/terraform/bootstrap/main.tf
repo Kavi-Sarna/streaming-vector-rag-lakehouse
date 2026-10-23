@@ -12,7 +12,8 @@ provider "aws" {
 data "aws_caller_identity" "current" {}
 
 locals {
-  state_bucket_name = var.state_bucket_name != "" ? var.state_bucket_name : "rag-demo-tfstate-${data.aws_caller_identity.current.account_id}"
+  state_bucket_name   = var.state_bucket_name != "" ? var.state_bucket_name : "rag-demo-tfstate-${data.aws_caller_identity.current.account_id}"
+  github_subject_repo = "${split("/", var.github_repository)[0]}@${var.github_owner_id}/${split("/", var.github_repository)[1]}@${var.github_repository_id}"
 }
 
 resource "aws_s3_bucket" "state" {

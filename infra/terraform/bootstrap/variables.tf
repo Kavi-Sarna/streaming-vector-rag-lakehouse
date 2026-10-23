@@ -15,3 +15,15 @@ variable "github_repository" {
   description = "GitHub repository allowed to assume the deploy role, as owner/name."
   default     = "Kavi-Sarna/streaming-vector-rag-lakehouse"
 }
+
+variable "github_owner_id" {
+  type        = string
+  description = "Numeric GitHub owner id. Included in the OIDC subject for repositories created after 2026-07-15."
+  default     = "135118806"
+}
+
+variable "github_repository_id" {
+  type        = string
+  description = "Numeric GitHub repository id. Included in the OIDC subject for repositories created after 2026-07-15."
+  default     = "1429327369"
+}
