@@ -2,7 +2,7 @@ name: network
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
 
 permissions:
   contents: read
@@ -17,6 +17,8 @@ jobs:
     name: Plan network
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    outputs:
+      changes: ${{ steps.plan.outputs.changes }}
     steps:
       - uses: actions/checkout@v7
 
@@ -45,10 +47,23 @@ jobs:
         run: printf 'bucket = "rag-demo-tfstate-%s"\n' "${{ vars.AWS_ACCOUNT_ID }}" > backend.hcl
 
       - name: Plan
+        id: plan
         working-directory: infra/terraform/environments/demo
         run: |
           terraform init -backend-config=backend.hcl -input=false
-          terraform plan -input=false -out=tfplan -target=module.networking
+          set +e
+          terraform plan -detailed-exitcode -input=false -out=tfplan -target=module.networking
+          code=$?
+          set -e
+          if [ "$code" -eq 1 ]; then
+            exit 1
+          fi
+          if [ "$code" -eq 2 ]; then
+            echo "changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changes=false" >> "$GITHUB_OUTPUT"
+            echo "Plan has no changes. Apply will not wait for approval."
+          fi
           terraform show -no-color tfplan > plan.txt
           {
             echo "## Network plan"
@@ -59,6 +74,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload plan
+        if: steps.plan.outputs.changes == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: tfplan
@@ -68,7 +84,7 @@ jobs:
   apply:
     name: Apply network
     needs: plan
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository && needs.plan.outputs.changes == 'true'
     runs-on: ubuntu-latest
     environment: demo
     steps:

@@ -17,6 +17,7 @@ buf config ls-modules >/dev/null
 
 if find api -name '*.proto' -print -quit | grep -q .; then
   buf lint
+  buf format -d --exit-code
 else
   echo "buf lint: api/ has no .proto files yet"
 fi

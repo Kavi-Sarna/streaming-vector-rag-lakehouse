@@ -6,7 +6,7 @@ The same Protobuf contracts run locally in Docker and, for a gated demo, on an e
 
 ## Ingest path
 
-A Go producer publishes Protobuf CDC events for insert, update, and delete. Locally the bus is Redpanda on port 9092. In AWS it is MSK Serverless on port 9098, authenticated with IAM.
+A Go producer publishes `DocumentEvent` Protobuf messages for insert, update, and delete. The query API is `v1.RAGService/StreamQuery`. Locally the bus is Redpanda on port 9092. In AWS it is MSK Serverless on port 9098, authenticated with IAM.
 
 A Flink job keys the stream by document id and drops a version it has already processed. It chunks markdown while keeping headers, code blocks, and lists intact. An async embedding step calls a local 384-dimension mock or Amazon Bedrock Titan Text Embeddings V2 at 1024 dimensions. An embedding response older than the latest processed version for that document is discarded before it reaches either sink.
 
@@ -45,7 +45,7 @@ A query is embedded, then checked against a Redis semantic cache filtered by ten
 ```
 api/          Protobuf contracts
 go/           Go module: commands and internal packages
-flink/        Flink job, added with the chunking change
+flink/        Flink source tree. Generated Java stubs live here. The job comes with the chunking change
 infra/        Compose and Terraform. Kubernetes manifests and Dockerfiles come later
 ci/           Check scripts. Workflows and the Makefile both call these.
 scripts/      Provisioning, seed, and verification scripts

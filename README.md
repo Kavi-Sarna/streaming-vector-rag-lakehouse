@@ -16,8 +16,9 @@ Local development uses Go, Apache Flink, Redpanda, Apache Iceberg, Redis Stack, 
 ## Layout
 
 ```
-api/     Protobuf workspace. Sources arrive with the contracts change.
-go/      Go module.
+api/     Protobuf contracts.
+go/      Go module. Generated Go stubs live in go/gen/v1.
+flink/   Flink source tree. Generated Java stubs live in flink/src/main/java. The job comes later.
 infra/   Compose, and Terraform for the state bucket and VPC. Kubernetes and Dockerfiles later.
 ci/      The checks GitHub Actions runs. `make ci` calls the same scripts.
 docs/    Architecture and walkthroughs.
@@ -38,6 +39,17 @@ On every pull request and every push to `main`, GitHub Actions installs Go, gola
 
 A failure reproduces locally with `make ci`. In Actions the Compose step fails if Docker is missing. On a laptop without Docker it is skipped with a warning.
 
+## Contracts
+
+`api/proto/v1/document_event.proto` is one CDC change for a markdown document: tenant, document id, version, and insert, update, or delete. `api/proto/v1/rag_service.proto` is `v1.RAGService/StreamQuery`.
+
+```sh
+make proto-gen
+make test
+```
+
+`make proto-gen` formats the contracts and writes Go stubs to `go/gen/v1` and Java stubs to `flink/src/main/java`. `make test` compiles the Go stubs. `make lint` checks Buf lint and format. Glue wire format is a later change. Local code uses these raw Protobuf messages.
+
 `make docker-up` starts that placeholder and leaves it running. `make docker-down` stops it. The local Redpanda, MinIO, Redis Stack, and Flink stack replaces it in a later change.
 
 ## AWS network
@@ -47,8 +59,8 @@ Two workflows, two different jobs. `ci` never calls AWS. `network` does, and onl
 |                           | What runs                                                                     | Creates resources                         |
 | ------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------- |
 | GitHub `ci`               | lint, unit tests, `terraform validate`, Compose smoke                         | No                                        |
-| GitHub `network`          | on a pull request: plan the VPC, print it on the job summary, then wait       | Not yet                                   |
-| GitHub `network` apply    | after you approve the `demo` environment deployment                           | Yes. VPC and one NAT gateway              |
+| GitHub `network`          | on a pull request: plan the VPC and print it on the job summary               | Not yet                                   |
+| GitHub `network` apply    | only when that plan has changes, after you approve the `demo` environment     | Yes. VPC and one NAT gateway              |
 | Your laptop               | `make tf-bootstrap` once, and `make tf-network-down` when you are finished    | Bootstrap once. Destroy removes the VPC   |
 
 The NAT gateway is about $0.045 per hour. Approving the deployment starts that charge. `make tf-network-down` stops it. No instances are launched. The shape is in [docs/architecture/02-cloud-service-map.md](docs/architecture/02-cloud-service-map.md).
@@ -67,7 +79,7 @@ Then in the GitHub repository settings:
 1. Variables: add `AWS_ACCOUNT_ID` with the 12-digit account id.
 2. Environments: create `demo` and add yourself as a required reviewer.
 
-Open the pull request after those exist. The plan is published on the Actions run. Approve the `demo` deployment to apply that plan. Until you approve, nothing in the VPC is created.
+Open the pull request after those exist. The plan is published on the Actions run. When the plan has changes, approve the `demo` deployment to apply it. A plan with no changes skips that approval. Until you approve a plan that has changes, nothing new is created in the VPC.
 
 Bring the network down from the laptop when you are finished. This uses your IAM user, not GitHub:
 
