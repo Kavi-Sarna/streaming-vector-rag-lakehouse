@@ -46,7 +46,7 @@ A query is embedded, then checked against a Redis semantic cache filtered by ten
 api/          Protobuf contracts
 go/           Go module: commands and internal packages
 flink/        Flink job, added with the chunking change
-infra/        Compose, Terraform, Kubernetes manifests, and Dockerfiles
+infra/        Compose and Terraform. Kubernetes manifests and Dockerfiles come later
 ci/           Check scripts. Workflows and the Makefile both call these.
 scripts/      Provisioning, seed, and verification scripts
 testdata/     Technical markdown corpus
@@ -57,4 +57,4 @@ GitHub Actions and Buildkite files stay at the repository root, because those pr
 
 ## This baseline
 
-The tooling baseline is the Go module, lint and test targets, the Buf workspace, a Compose file that can start and stop, and CI for those checks. The producer, Flink job, sinks, and gateway land in later changes. The Compose file in this baseline runs a single placeholder container so `make up` and `make down` have a real project to act on.
+The tooling baseline is the Go module, lint and test targets, the Buf workspace, a Compose file that can start and stop, and CI for those checks. The producer, Flink job, sinks, and gateway land in later changes. The Compose file in this baseline runs a single placeholder container so `make docker-up` and `make docker-down` have a real project to act on.
