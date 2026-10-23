@@ -10,4 +10,5 @@ cd "$(dirname "$0")/.."
 
 ./ci/lint.sh
 ./ci/test.sh
+./ci/terraform.sh
 ./ci/smoke.sh

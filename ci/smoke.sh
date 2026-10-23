@@ -20,7 +20,7 @@ if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
   exit 0
 fi
 
-cleanup() { make down >/dev/null 2>&1 || true; }
+cleanup() { make docker-down >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
-make up
+make docker-up

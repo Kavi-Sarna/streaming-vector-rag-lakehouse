@@ -1,4 +1,4 @@
-# Placeholder so `make up` and `make down` exercise Compose.
+# Placeholder so `make docker-up` and `make docker-down` exercise Compose.
 # The local topology change replaces this service with Redpanda, MinIO,
 # Redis Stack, Flink, and the mock embedder.
 name: rag-lakehouse
