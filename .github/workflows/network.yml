@@ -52,7 +52,7 @@ jobs:
         run: |
           terraform init -backend-config=backend.hcl -input=false
           set +e
-          terraform plan -detailed-exitcode -input=false -out=tfplan -target=module.networking
+          terraform plan -detailed-exitcode -input=false -out=tfplan -target=module.networking -target=module.schema_registry
           code=$?
           set -e
           if [ "$code" -eq 1 ]; then

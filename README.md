@@ -48,7 +48,9 @@ make proto-gen
 make test
 ```
 
-`make proto-gen` formats the contracts and writes Go stubs to `go/gen/v1` and Java stubs to `flink/src/main/java`. `make test` compiles the Go stubs. `make lint` checks Buf lint and format. Glue wire format is a later change. Local code uses these raw Protobuf messages.
+`make proto-gen` formats the contracts and writes Go stubs to `go/gen/v1` and Java stubs to `flink/src/main/java`. `make test` compiles the Go stubs and checks the Glue wire frame. `make lint` checks Buf lint and format.
+
+Local records are the raw Protobuf bytes. A cloud record puts an 18-byte Glue header in front of those bytes: version `0x03`, a compression byte, and the schema version id. The demo stack registers `document_event` in the Glue registry `rag-demo`.
 
 `make docker-up` starts that placeholder and leaves it running. `make docker-down` stops it. The local Redpanda, MinIO, Redis Stack, and Flink stack replaces it in a later change.
 
@@ -59,9 +61,9 @@ Two workflows, two different jobs. `ci` never calls AWS. `network` does, and onl
 |                           | What runs                                                                     | Creates resources                         |
 | ------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------- |
 | GitHub `ci`               | lint, unit tests, `terraform validate`, Compose smoke                         | No                                        |
-| GitHub `network`          | on a pull request: plan the VPC and print it on the job summary               | Not yet                                   |
-| GitHub `network` apply    | only when that plan has changes, after you approve the `demo` environment     | Yes. VPC and one NAT gateway              |
-| Your laptop               | `make tf-bootstrap` once, and `make tf-network-down` when you are finished    | Bootstrap once. Destroy removes the VPC   |
+| GitHub `network`          | on a pull request: plan the VPC and the Glue registry, then print the plan    | Not yet                                   |
+| GitHub `network` apply    | only when that plan has changes, after you approve the `demo` environment     | Yes. VPC, one NAT gateway, and the Glue registry |
+| Your laptop               | `make tf-bootstrap` once, and `make tf-network-down` when you are finished    | Bootstrap once. Destroy removes the VPC and the registry |
 
 The NAT gateway is about $0.045 per hour. Approving the deployment starts that charge. `make tf-network-down` stops it. No instances are launched. The shape is in [docs/architecture/02-cloud-service-map.md](docs/architecture/02-cloud-service-map.md).
 
@@ -72,7 +74,7 @@ aws sts get-caller-identity
 make tf-bootstrap
 ```
 
-`make tf-bootstrap` creates the state bucket `rag-demo-tfstate-<account id>` and the role `rag-demo-github-deploy`. Its state file stays on the laptop at `infra/terraform/bootstrap/terraform.tfstate` (gitignored). Keep that file.
+`make tf-bootstrap` creates the state bucket `rag-demo-tfstate-<account id>` and the role `rag-demo-github-deploy`. Its state file stays on the laptop at `infra/terraform/bootstrap/terraform.tfstate` (gitignored). Keep that file. Run it again when the role policy changes. The network plan calls Glue, and that call fails until this apply adds the Glue permissions to the role.
 
 Then in the GitHub repository settings:
 
