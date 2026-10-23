@@ -5,7 +5,7 @@ COMPOSE := docker compose -f infra/compose/docker-compose.yml
 BOOTSTRAP := infra/terraform/bootstrap
 DEMO := infra/terraform/environments/demo
 
-.PHONY: help lint test ci smoke docker-up docker-down terraform backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network
+.PHONY: help lint test ci smoke docker-up docker-down terraform proto-gen backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network
 
 help: ## Show this help
 	@grep -hE '^[a-z0-9-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -25,6 +25,12 @@ smoke: ## Start the Compose project and tear it down
 
 terraform: ## Format-check and validate Terraform. Does not call AWS
 	./ci/terraform.sh
+
+proto-gen: ## Generate Go and Java stubs from the Protobuf contracts
+	buf format -w
+	buf generate
+	buf lint
+	( cd go && go mod tidy )
 
 backend-hcl: ## Write demo/backend.hcl from the bootstrap bucket name
 	@if bucket="$$(terraform -chdir=$(BOOTSTRAP) output -raw state_bucket_name 2>/dev/null)"; then \

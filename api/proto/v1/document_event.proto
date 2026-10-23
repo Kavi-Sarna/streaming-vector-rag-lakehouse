@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package v1;
+
+option go_package = "github.com/Kavi-Sarna/streaming-vector-rag-lakehouse/go/gen/v1;v1";
+option java_multiple_files = true;
+option java_outer_classname = "DocumentEventProto";
+option java_package = "com.sarna.rag.v1";
+
+// DocumentEvent is one CDC change for a technical markdown document.
+// Consumers key the stream by document_id and keep the highest version
+// they have applied. An event with a lower version is stale.
+message DocumentEvent {
+  string tenant_id = 1;
+  string document_id = 2;
+  int64 version = 3;
+  Operation operation = 4;
+  string markdown = 5;
+}
+
+enum Operation {
+  OPERATION_UNSPECIFIED = 0;
+  OPERATION_INSERT = 1;
+  OPERATION_UPDATE = 2;
+  OPERATION_DELETE = 3;
+}

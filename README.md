@@ -16,8 +16,9 @@ Local development uses Go, Apache Flink, Redpanda, Apache Iceberg, Redis Stack, 
 ## Layout
 
 ```
-api/     Protobuf workspace. Sources arrive with the contracts change.
-go/      Go module.
+api/     Protobuf contracts.
+go/      Go module. Generated Go stubs live in go/gen/v1.
+flink/   Flink source tree. Generated Java stubs live in flink/src/main/java. The job comes later.
 infra/   Compose, and Terraform for the state bucket and VPC. Kubernetes and Dockerfiles later.
 ci/      The checks GitHub Actions runs. `make ci` calls the same scripts.
 docs/    Architecture and walkthroughs.
@@ -37,6 +38,17 @@ On every pull request and every push to `main`, GitHub Actions installs Go, gola
 - `make smoke` starts the placeholder Compose container and removes it.
 
 A failure reproduces locally with `make ci`. In Actions the Compose step fails if Docker is missing. On a laptop without Docker it is skipped with a warning.
+
+## Contracts
+
+`api/proto/v1/document_event.proto` is one CDC change for a markdown document: tenant, document id, version, and insert, update, or delete. `api/proto/v1/rag_service.proto` is `v1.RAGService/StreamQuery`.
+
+```sh
+make proto-gen
+make test
+```
+
+`make proto-gen` formats the contracts and writes Go stubs to `go/gen/v1` and Java stubs to `flink/src/main/java`. `make test` compiles the Go stubs. `make lint` checks Buf lint and format. Glue wire format is a later change. Local code uses these raw Protobuf messages.
 
 `make docker-up` starts that placeholder and leaves it running. `make docker-down` stops it. The local Redpanda, MinIO, Redis Stack, and Flink stack replaces it in a later change.
 
