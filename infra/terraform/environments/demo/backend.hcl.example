@@ -1,0 +1,3 @@
+# Copy to backend.hcl after applying infra/terraform/bootstrap.
+# backend.hcl is gitignored; it names the state bucket in your account.
+bucket = "rag-demo-tfstate-ACCOUNT_ID"

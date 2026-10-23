@@ -1,0 +1,15 @@
+# Placeholder so `make docker-up` and `make docker-down` exercise Compose.
+# The local topology change replaces this service with Redpanda, MinIO,
+# Redis Stack, Flink, and the mock embedder.
+name: rag-lakehouse
+
+services:
+  smoke:
+    image: busybox:1.37.0
+    command: ["sleep", "infinity"]
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 2s
+      timeout: 1s
+      retries: 5
+      start_period: 1s
