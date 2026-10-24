@@ -47,3 +47,10 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 backend.hcl
+
+# Seed corpus downloaded by make seed-data
+testdata/keps/*.md
+testdata/arxiv/*.md
+testdata/arxiv/feed.xml
+testdata/hf/*.md
+testdata/arxiv_raw.xml

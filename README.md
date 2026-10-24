@@ -55,7 +55,13 @@ Local records are the raw Protobuf bytes. A cloud record puts an 18-byte Glue he
 
 ## Local stack
 
-`make docker-up` starts the backing services and leaves them running. `make docker-health` checks them from the host. `make docker-down` stops them. No producer, Flink job, or query gateway is submitted.
+`make docker-up` starts the backing services and leaves them running. `make docker-health` checks them from the host. `make docker-down` stops them. No Flink job or query gateway is submitted.
+
+## CDC producer
+
+`make seed-data` downloads three corpora into `testdata/`: 40 Kubernetes enhancement proposals in `keps/`, 40 arXiv abstracts in `arxiv/`, and 40 HuggingFace `ag_news` articles in `hf/`. The HuggingFace export needs `pip install datasets`. `make seed-data-keps`, `make seed-data-arxiv`, and `make seed-data-hf` refresh one source.
+
+`make producer` publishes 300 `DocumentEvent` records to `document.events.v1` on `localhost:9092`. Redpanda must already be running. It reads every markdown file under `testdata/`. Each record is raw Protobuf, keyed by the path of the file, such as `keps/sig-node_2000-graceful-node-shutdown`. The pause between records is random, from 200ms to 1.5s, so the run lasts about three to seven minutes. Each file is inserted, then updated, and then deleted about one time in five. Which files are deleted changes every run. The command prints the seed so the same choices can be repeated with `--seed`. Pass `ARGS='--sleep-min=100ms --sleep-max=400ms --burst=30 --delete-chance=0.3'` to change the pace and the delete share. `--sleep-max=0 --rate=50` publishes at a fixed 50 per second. `--security=aws-msk-iam` and `--glue-schema-version` are the MSK path. The steps are in [docs/walkthroughs/02-cdc-event-producer.md](docs/walkthroughs/02-cdc-event-producer.md).
 
 | Service        | Address                              | What it is                                                                        |
 | -------------- | ------------------------------------ | --------------------------------------------------------------------------------- |
