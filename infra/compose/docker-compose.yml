@@ -1,15 +1,125 @@
-# Placeholder so `make docker-up` and `make docker-down` exercise Compose.
-# The local topology change replaces this service with Redpanda, MinIO,
-# Redis Stack, Flink, and the mock embedder.
+# Local backing services. No producer, Flink job, or query gateway runs here.
+# The object store is Silo (pgsty/silo): the MinIO S3 API, because the
+# official MinIO image is no longer anonymously pullable.
 name: rag-lakehouse
 
 services:
-  smoke:
-    image: busybox:1.37.0
-    command: ["sleep", "infinity"]
+  redpanda:
+    image: docker.io/redpandadata/redpanda:v26.2.6
+    entrypoint: ["/usr/bin/rpk"]
+    command:
+      - redpanda
+      - start
+      - --mode
+      - dev-container
+      - --kafka-addr
+      - internal://0.0.0.0:9093,external://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - internal://redpanda:9093,external://localhost:9092
+      - --rpc-addr
+      - 0.0.0.0:33145
+      - --advertise-rpc-addr
+      - redpanda:33145
+      - --schema-registry-addr
+      - internal://0.0.0.0:8081
+      - --pandaproxy-addr
+      - internal://0.0.0.0:8082
+    ports:
+      - "9092:9092"
+    volumes:
+      - redpanda:/var/lib/redpanda/data
     healthcheck:
-      test: ["CMD", "true"]
-      interval: 2s
-      timeout: 1s
-      retries: 5
-      start_period: 1s
+      test:
+        - CMD-SHELL
+        - rpk cluster health && { rpk topic describe document.events.v1 -X brokers=127.0.0.1:9093 >/dev/null 2>&1 || rpk topic create document.events.v1 -p 1 -r 1 -X brokers=127.0.0.1:9093; }
+      interval: 5s
+      timeout: 15s
+      retries: 30
+      start_period: 15s
+
+  minio:
+    image: docker.io/pgsty/silo:RELEASE.2026-10-18T00-00-00Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio12345
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - silo healthcheck ready && mc alias set local http://127.0.0.1:9000 minio minio12345 && mc mb --ignore-existing local/lakehouse
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 5s
+
+  redis:
+    image: docker.io/redis/redis-stack-server:7.4.0-v8
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  flink-jobmanager:
+    image: docker.io/library/flink:1.20.5-scala_2.12-java17
+    command: jobmanager
+    ports:
+      - "8081:8081"
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        jobmanager.memory.process.size: 768m
+        taskmanager.numberOfTaskSlots: 2
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8081'"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+  flink-taskmanager:
+    image: docker.io/library/flink:1.20.5-scala_2.12-java17
+    command: taskmanager
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.memory.process.size: 1024m
+        taskmanager.numberOfTaskSlots: 2
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/flink-jobmanager/6123'"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+  mock-embedder:
+    build:
+      context: ../../go
+      dockerfile: cmd/mock-embedder/Dockerfile
+    image: rag-lakehouse-mock-embedder:local
+    ports:
+      - "8091:8080"
+    healthcheck:
+      test: ["CMD", "/mock-embedder", "-healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  redpanda:
+  minio:
+  redis:

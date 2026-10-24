@@ -5,7 +5,7 @@ COMPOSE := docker compose -f infra/compose/docker-compose.yml
 BOOTSTRAP := infra/terraform/bootstrap
 DEMO := infra/terraform/environments/demo
 
-.PHONY: help lint test ci smoke docker-up docker-down terraform backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network
+.PHONY: help lint test ci smoke docker-up docker-down docker-health terraform proto-gen backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network
 
 help: ## Show this help
 	@grep -hE '^[a-z0-9-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -26,6 +26,12 @@ smoke: ## Start the Compose project and tear it down
 terraform: ## Format-check and validate Terraform. Does not call AWS
 	./ci/terraform.sh
 
+proto-gen: ## Generate Go and Java stubs from the Protobuf contracts
+	buf format -w
+	buf generate
+	buf lint
+	( cd go && go mod tidy )
+
 backend-hcl: ## Write demo/backend.hcl from the bootstrap bucket name
 	@if bucket="$$(terraform -chdir=$(BOOTSTRAP) output -raw state_bucket_name 2>/dev/null)"; then \
 	  printf 'bucket = "%s"\n' "$$bucket" > $(DEMO)/backend.hcl; \
@@ -41,11 +47,11 @@ tf-bootstrap: ## Create the state bucket and GitHub deploy role
 	terraform -chdir=$(BOOTSTRAP) init -input=false
 	terraform -chdir=$(BOOTSTRAP) apply
 
-tf-network-up: backend-hcl ## Create the VPC and NAT gateway
+tf-network-up: backend-hcl ## Create the VPC, NAT gateway, Glue registry, and EKS cluster
 	terraform -chdir=$(DEMO) init -backend-config=backend.hcl -input=false
 	terraform -chdir=$(DEMO) apply
 
-tf-network-down: backend-hcl ## Destroy the VPC and stop the NAT gateway charge
+tf-network-down: backend-hcl ## Destroy the demo stack and stop NAT, EKS, and node charges
 	terraform -chdir=$(DEMO) init -backend-config=backend.hcl -input=false
 	terraform -chdir=$(DEMO) destroy
 
@@ -53,12 +59,15 @@ tf-bootstrap-down: ## Destroy the state bucket and GitHub role. Run tf-network-d
 	terraform -chdir=$(BOOTSTRAP) init -input=false
 	terraform -chdir=$(BOOTSTRAP) destroy
 
-tf-plan-network: backend-hcl ## Plan the VPC. Needs AWS credentials and an applied bootstrap
+tf-plan-network: backend-hcl ## Plan the VPC, Glue registry, and EKS cluster. Needs AWS credentials and an applied bootstrap
 	terraform -chdir=$(DEMO) init -backend-config=backend.hcl -input=false
-	terraform -chdir=$(DEMO) plan -target=module.networking
+	terraform -chdir=$(DEMO) plan -target=module.networking -target=module.schema_registry -target=module.compute_eks
 
-docker-up: ## Start the Compose project
-	$(COMPOSE) up -d --wait
+docker-up: ## Start Redpanda, Silo, Redis Stack, Flink, and the mock embedder
+	$(COMPOSE) up -d --wait --build
 
 docker-down: ## Stop the Compose project
 	$(COMPOSE) down --remove-orphans
+
+docker-health: ## Check the local stack from the host
+	./scripts/verify-infra-health.sh

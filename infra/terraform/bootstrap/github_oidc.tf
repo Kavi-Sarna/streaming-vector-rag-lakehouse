@@ -71,12 +71,74 @@ data "aws_iam_policy_document" "github_deploy" {
     resources = ["${aws_s3_bucket.state.arn}/*"]
   }
 
-  # The demo composition's only resources today are the VPC. Later modules
-  # extend this policy when they add EKS, MSK, and the lakehouse bucket.
+  # The demo composition's resources today are the VPC, the Glue schema
+  # registry, and the EKS cluster. Later modules extend this policy when
+  # they add MSK and the lakehouse bucket.
   statement {
     sid       = "Network"
     effect    = "Allow"
     actions   = ["ec2:*"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "EKS"
+    effect    = "Allow"
+    actions   = ["eks:*"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "EKSIam"
+    effect = "Allow"
+    actions = [
+      "iam:CreateRole",
+      "iam:DeleteRole",
+      "iam:GetRole",
+      "iam:ListRolePolicies",
+      "iam:ListAttachedRolePolicies",
+      "iam:ListInstanceProfilesForRole",
+      "iam:TagRole",
+      "iam:UntagRole",
+      "iam:UpdateAssumeRolePolicy",
+      "iam:AttachRolePolicy",
+      "iam:DetachRolePolicy",
+      "iam:PassRole",
+      "iam:CreateOpenIDConnectProvider",
+      "iam:DeleteOpenIDConnectProvider",
+      "iam:GetOpenIDConnectProvider",
+      "iam:ListOpenIDConnectProviders",
+      "iam:TagOpenIDConnectProvider",
+      "iam:UntagOpenIDConnectProvider",
+      "iam:UpdateOpenIDConnectProviderThumbprint",
+      "iam:CreateServiceLinkedRole",
+      "iam:GetPolicy",
+      "iam:GetPolicyVersion",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "SchemaRegistry"
+    effect = "Allow"
+    actions = [
+      "glue:CreateRegistry",
+      "glue:GetRegistry",
+      "glue:UpdateRegistry",
+      "glue:DeleteRegistry",
+      "glue:CreateSchema",
+      "glue:GetSchema",
+      "glue:UpdateSchema",
+      "glue:DeleteSchema",
+      "glue:RegisterSchemaVersion",
+      "glue:GetSchemaVersion",
+      "glue:GetSchemaByDefinition",
+      "glue:ListSchemas",
+      "glue:ListSchemaVersions",
+      "glue:TagResource",
+      "glue:UntagResource",
+      "glue:GetTags",
+    ]
     resources = ["*"]
   }
 }

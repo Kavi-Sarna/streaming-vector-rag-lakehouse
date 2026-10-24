@@ -1,9 +1,13 @@
 version: v2
 modules:
-  - path: api
+  - path: api/proto
 lint:
   use:
     - STANDARD
+  except:
+    # Package v1 is the service name grpcurl calls: v1.RAGService.
+    # The version-suffix rule wants a name in front of v1.
+    - PACKAGE_VERSION_SUFFIX
 breaking:
   use:
     - FILE

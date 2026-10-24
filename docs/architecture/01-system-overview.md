@@ -6,7 +6,7 @@ The same Protobuf contracts run locally in Docker and, for a gated demo, on an e
 
 ## Ingest path
 
-A Go producer publishes Protobuf CDC events for insert, update, and delete. Locally the bus is Redpanda on port 9092. In AWS it is MSK Serverless on port 9098, authenticated with IAM.
+A Go producer publishes `DocumentEvent` Protobuf messages for insert, update, and delete. The query API is `v1.RAGService/StreamQuery`. On MSK, each record is a Glue Schema Registry frame: an 18-byte header and then those Protobuf bytes. Local Redpanda records stay raw Protobuf. Locally the bus is Redpanda on port 9092. In AWS it is MSK Serverless on port 9098, authenticated with IAM.
 
 A Flink job keys the stream by document id and drops a version it has already processed. It chunks markdown while keeping headers, code blocks, and lists intact. An async embedding step calls a local 384-dimension mock or Amazon Bedrock Titan Text Embeddings V2 at 1024 dimensions. An embedding response older than the latest processed version for that document is discarded before it reaches either sink.
 
@@ -25,27 +25,27 @@ A query is embedded, then checked against a Redis semantic cache filtered by ten
 
 ## Local and cloud runtimes
 
-| Concern           | Local                         | AWS                                                   |
-| ----------------- | ----------------------------- | ----------------------------------------------------- |
-| Network           | Docker network                | VPC in two AZs, one NAT gateway, us-east-1            |
-| Orchestration     | Docker Compose                | EKS, two m6i.large nodes, Flink Kubernetes Operator   |
-| Bus               | Redpanda :9092                | MSK Serverless :9098, IAM                             |
-| Contracts         | Raw Protobuf                  | Glue Schema Registry                                  |
-| Lakehouse         | MinIO, Hadoop catalog         | S3, Glue Data Catalog                                 |
-| Vectors           | Redis Stack                   | Redis Stack on EKS                                    |
-| Embeddings        | Mock, 384 dimensions          | Titan Text Embeddings V2, 1024 dimensions             |
-| Rerank            | Lexical overlap               | Cohere Rerank 3.5                                     |
-| LLM               | Mock stream                   | Claude 3.5 Sonnet                                     |
-| Entry             | localhost:9090                | Network Load Balancer, TCP 9090                       |
-| Telemetry         | Jaeger, Prometheus, Grafana   | ADOT to X-Ray and CloudWatch                          |
-| Identity          | None                          | IRSA and GitHub OIDC                                  |
+| Concern           | Local                                 | AWS                                                   |
+| ----------------- | ------------------------------------- | ----------------------------------------------------- |
+| Network           | Docker network                        | VPC in two AZs, one NAT gateway, us-east-1            |
+| Orchestration     | Docker Compose                        | EKS, two m6i.large nodes, Flink Kubernetes Operator   |
+| Bus               | Redpanda :9092                        | MSK Serverless :9098, IAM                             |
+| Contracts         | Raw Protobuf                          | Glue Schema Registry                                  |
+| Lakehouse         | Silo (MinIO S3 API), Hadoop catalog   | S3, Glue Data Catalog                                 |
+| Vectors           | Redis Stack                           | Redis Stack on EKS                                    |
+| Embeddings        | Mock, 384 dimensions                  | Titan Text Embeddings V2, 1024 dimensions             |
+| Rerank            | Lexical overlap                       | Cohere Rerank 3.5                                     |
+| LLM               | Mock stream                           | Claude 3.5 Sonnet                                     |
+| Entry             | localhost:9090                        | Network Load Balancer, TCP 9090                       |
+| Telemetry         | Jaeger, Prometheus, Grafana           | ADOT to X-Ray and CloudWatch                          |
+| Identity          | None                                  | IRSA and GitHub OIDC                                  |
 
 ## Repository layout
 
 ```
 api/          Protobuf contracts
 go/           Go module: commands and internal packages
-flink/        Flink job, added with the chunking change
+flink/        Flink source tree. Generated Java stubs live here. The job comes with the chunking change
 infra/        Compose and Terraform. Kubernetes manifests and Dockerfiles come later
 ci/           Check scripts. Workflows and the Makefile both call these.
 scripts/      Provisioning, seed, and verification scripts
@@ -55,6 +55,8 @@ docs/         Architecture and walkthroughs
 
 GitHub Actions and Buildkite files stay at the repository root, because those products only read workflows from there. The workflow files install tools and call `ci/run.sh`. The checks themselves live in that script.
 
-## This baseline
+## Local topology
 
-The tooling baseline is the Go module, lint and test targets, the Buf workspace, a Compose file that can start and stop, and CI for those checks. The producer, Flink job, sinks, and gateway land in later changes. The Compose file in this baseline runs a single placeholder container so `make docker-up` and `make docker-down` have a real project to act on.
+`make docker-up` starts Redpanda, Silo, Redis Stack, a Flink JobManager and TaskManager, and the mock embedder. Silo is the local object store: the official MinIO image is no longer anonymously pullable, and Silo serves the same S3 API. The bucket is `lakehouse`.
+
+The producer, the Flink job, the sinks, and the query gateway are not part of this stack. Flink is running and idle. Redpanda has the topic `document.events.v1`. Host clients use `localhost:9092`. Containers on the Compose network use `redpanda:9093`.

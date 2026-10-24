@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package v1;
+
+option go_package = "github.com/Kavi-Sarna/streaming-vector-rag-lakehouse/go/gen/v1;v1";
+option java_multiple_files = true;
+option java_outer_classname = "RagServiceProto";
+option java_package = "com.sarna.rag.v1";
+
+// RAGService streams an answer for one tenant.
+service RAGService {
+  rpc StreamQuery(StreamQueryRequest) returns (stream StreamQueryResponse);
+}
+
+message StreamQueryRequest {
+  string tenant_id = 1;
+  string query_text = 2;
+}
+
+// StreamQueryResponse is one piece of the streamed answer.
+message StreamQueryResponse {
+  string token = 1;
+}
