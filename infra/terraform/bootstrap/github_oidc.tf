@@ -72,8 +72,9 @@ data "aws_iam_policy_document" "github_deploy" {
   }
 
   # The demo composition's resources today are the VPC, the Glue schema
-  # registry, the producer ECR repository, and the EKS cluster. Later
-  # modules extend this policy when they add MSK and the lakehouse bucket.
+  # registry, the producer ECR repository, MSK Serverless, and the EKS
+  # cluster. Later modules extend this policy when they add the lakehouse
+  # bucket.
   statement {
     sid       = "Network"
     effect    = "Allow"
@@ -96,6 +97,9 @@ data "aws_iam_policy_document" "github_deploy" {
       "iam:DeleteRole",
       "iam:GetRole",
       "iam:ListRolePolicies",
+      "iam:GetRolePolicy",
+      "iam:PutRolePolicy",
+      "iam:DeleteRolePolicy",
       "iam:ListAttachedRolePolicies",
       "iam:ListInstanceProfilesForRole",
       "iam:TagRole",
@@ -140,6 +144,23 @@ data "aws_iam_policy_document" "github_deploy" {
       "ecr:PutLifecyclePolicy",
       "ecr:GetLifecyclePolicy",
       "ecr:DeleteLifecyclePolicy",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "MSK"
+    effect = "Allow"
+    actions = [
+      "kafka:CreateClusterV2",
+      "kafka:DeleteCluster",
+      "kafka:DescribeCluster",
+      "kafka:DescribeClusterV2",
+      "kafka:GetBootstrapBrokers",
+      "kafka:ListClustersV2",
+      "kafka:ListTagsForResource",
+      "kafka:TagResource",
+      "kafka:UntagResource",
     ]
     resources = ["*"]
   }

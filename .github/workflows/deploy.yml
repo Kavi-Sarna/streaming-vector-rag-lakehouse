@@ -37,11 +37,12 @@ jobs:
           sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
           kubectl version --client
 
-      - name: Point the manifests at this image and the Glue schema
+      - name: Point the manifests at this image, Glue, and MSK
         env:
           ECR_IMAGE_NAME: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/rag-demo-producer
           IMAGE_TAG: ${{ github.sha }}
           MSK_BOOTSTRAP: ${{ vars.MSK_BOOTSTRAP }}
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
         run: |
           python3 - <<'PY'
           import os
@@ -72,24 +73,38 @@ jobs:
             echo "Glue schema version for document_event was not found." >&2
             exit 1
           fi
-          python3 - "$schema_id" <<'PY'
-          import os
+          cluster_arn=$(aws kafka list-clusters-v2 \
+            --query "ClusterInfoList[?ClusterName=='rag-demo'].ClusterArn | [0]" \
+            --output text)
+          if [ -z "$cluster_arn" ] || [ "$cluster_arn" = "None" ]; then
+            echo "MSK Serverless cluster rag-demo was not found." >&2
+            exit 1
+          fi
+          brokers="${MSK_BOOTSTRAP}"
+          if [ -z "$brokers" ]; then
+            brokers=$(aws kafka get-bootstrap-brokers \
+              --cluster-arn "$cluster_arn" \
+              --query BootstrapBrokerStringSaslIam \
+              --output text)
+          fi
+          if [ -z "$brokers" ] || [ "$brokers" = "None" ]; then
+            echo "MSK IAM bootstrap brokers were not found." >&2
+            exit 1
+          fi
+          role_arn="arn:aws:iam::${AWS_ACCOUNT_ID}:role/rag-demo-producer"
+          python3 - "$schema_id" "$brokers" "$role_arn" <<'PY'
           import sys
           from pathlib import Path
 
           path = Path("infra/k8s/producer-job.yaml")
-          text = path.read_text().replace(
-              "REPLACE_WITH_GLUE_SCHEMA_VERSION_ID",
-              sys.argv[1],
-          )
-          brokers = os.environ.get("MSK_BOOTSTRAP", "")
-          if brokers:
-              text = text.replace("REPLACE_WITH_MSK_BOOTSTRAP", brokers)
+          text = path.read_text()
+          text = text.replace("REPLACE_WITH_GLUE_SCHEMA_VERSION_ID", sys.argv[1])
+          text = text.replace("REPLACE_WITH_MSK_BOOTSTRAP", sys.argv[2])
+          text = text.replace("REPLACE_WITH_PRODUCER_ROLE_ARN", sys.argv[3])
           path.write_text(text)
           PY
-          if [ -z "${MSK_BOOTSTRAP}" ]; then
-            echo "MSK_BOOTSTRAP is unset. The Job is applied with placeholder brokers and cannot publish until MSK exists."
-          fi
+          echo "Producer brokers: $brokers"
+          echo "Producer role: $role_arn"
 
       - name: Apply the producer and its dashboard
         run: |
@@ -103,7 +118,7 @@ jobs:
           {
             echo "## Producer deploy"
             echo
-            echo "Image \`${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/rag-demo-producer:${{ github.sha }}\` is on the cluster."
+            echo "Image \`${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/rag-demo-producer:${{ github.sha }}\` publishes to MSK topic \`document.events.v1\`."
             echo "Grafana is in namespace \`rag\`. \`kubectl -n rag port-forward svc/grafana 3000:3000\` opens the Producer dashboard."
-            echo "The producer publishes once \`BROKERS\` is an MSK bootstrap string. Set the repository variable \`MSK_BOOTSTRAP\` to fill it on the next deploy."
+            echo "\`kubectl delete job producer -n rag\` stops the producer."
           } >> "$GITHUB_STEP_SUMMARY"

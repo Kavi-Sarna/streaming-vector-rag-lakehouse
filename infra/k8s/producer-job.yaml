@@ -1,8 +1,8 @@
-# In-cluster producer. The deploy job rewrites the image to the ECR URI
-# and fills SCHEMA_VERSION_ID from Glue. BROKERS stays a placeholder until
-# MSK exists, or until the repository variable MSK_BOOTSTRAP is set.
-# The IRSA role annotation is added with the MSK stack. MSK is in private subnets,
-# so this Job is the process that can reach the brokers.
+# In-cluster producer. The deploy job rewrites the image to the ECR URI,
+# fills SCHEMA_VERSION_ID from Glue, sets BROKERS from the MSK cluster, and
+# sets the producer role annotation. MSK is in private subnets, so this Job
+# is the process that can reach the brokers. The first publish creates
+# document.events.v1 when it is missing.
 # Publish settings match the local producer: 300 events, a random pause, and the
 # same delete chance. Metrics stay on :9095 until the Job is deleted.
 apiVersion: v1
@@ -15,6 +15,8 @@ kind: ServiceAccount
 metadata:
   name: producer
   namespace: rag
+  annotations:
+    eks.amazonaws.com/role-arn: REPLACE_WITH_PRODUCER_ROLE_ARN
 ---
 apiVersion: batch/v1
 kind: Job

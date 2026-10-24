@@ -25,7 +25,7 @@ Destroying the demo composition does not delete this bucket or this role. The ne
 
 MSK Serverless requires two Availability Zones. A second NAT gateway would add another hourly charge for the whole session, so both private subnets share one.
 
-Public subnets are tagged for external load balancers. Private subnets are tagged for internal load balancers and for an EKS cluster named `rag-demo`. MSK and the lakehouse bucket are not created here.
+Public subnets are tagged for external load balancers. Private subnets are tagged for internal load balancers and for an EKS cluster named `rag-demo`. The lakehouse bucket is not created here.
 
 ## EKS
 
@@ -35,10 +35,16 @@ The node group is two on-demand `m6i.large` instances, Amazon Linux 2023, linux/
 
 The control plane is about $0.10 per hour. The two nodes are about $0.192 per hour together. Extended support is not selected. `make tf-network-down` deletes the cluster and the nodes.
 
+## MSK Serverless
+
+`modules/msk` creates cluster `rag-demo` in the two private subnets. Clients authenticate with IAM on port 9098. The broker security group accepts that port from the EKS node security group. The producer service account `rag/producer` assumes role `rag-demo-producer`, which can create and write `document.events.v1`. The topic is one partition. The producer creates it on the first publish. The deploy job copies the cluster's bootstrap brokers into the Job.
+
+MSK Serverless is about $0.10 per hour, plus a partition-hour and the bytes written. `make tf-network-down` deletes the cluster with the rest of the demo stack.
+
 ## Producer image repository
 
 `modules/ecr` creates `rag-demo-producer`. Image tags are mutable, the repository is deleted with the demo stack even when it still holds images, and a lifecycle rule keeps the last 10 images. The repository has no hourly charge. Storage is billed for the images that are pushed. The deploy job builds the producer from `infra/docker/producer.Dockerfile`, and that build downloads the seed corpus into the image.
 
 ## Apply and destroy
 
-The commands are in the README. `make terraform` checks formatting and runs `terraform validate` with no AWS account. `make tf-plan-network` plans the network, the Glue registry, the producer repository, and this cluster after `backend.hcl` exists. Apply stays in `.github/workflows/network.yml`. Deploys live in `.github/workflows/deploy.yml`. Unblock deploy waits on the same `demo` environment as Apply. An empty plan does not make it wait for Apply. A plan with changes does. Approving Apply does not approve the release. That file then pushes the image and applies `infra/k8s`. Later deploys are added there.
+The commands are in the README. `make terraform` checks formatting and runs `terraform validate` with no AWS account. `make tf-plan-network` plans the network, the Glue registry, the producer repository, this cluster, and MSK Serverless after `backend.hcl` exists. Apply stays in `.github/workflows/network.yml`. Deploys live in `.github/workflows/deploy.yml`. Unblock deploy waits on the same `demo` environment as Apply. An empty plan does not make it wait for Apply. A plan with changes does. Approving Apply does not approve the release. That file then pushes the image and applies `infra/k8s`. Later deploys are added there.
