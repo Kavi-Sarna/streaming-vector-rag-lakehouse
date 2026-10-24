@@ -1,0 +1,109 @@
+name: deploy
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  producer:
+    name: Deploy producer
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/rag-demo-github-deploy
+
+      - name: Build and push the producer image
+        env:
+          IMAGE: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/rag-demo-producer:${{ github.sha }}
+        run: |
+          aws ecr get-login-password --region us-east-1 \
+            | docker login --username AWS --password-stdin "${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com"
+          docker build --platform linux/amd64 -f infra/docker/producer.Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Install kubectl
+        run: |
+          version=$(curl -fsSL https://dl.k8s.io/release/stable-1.37.txt)
+          curl -fsSL -o /tmp/kubectl "https://dl.k8s.io/release/${version}/bin/linux/amd64/kubectl"
+          sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+          kubectl version --client
+
+      - name: Point the manifests at this image and the Glue schema
+        env:
+          ECR_IMAGE_NAME: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/rag-demo-producer
+          IMAGE_TAG: ${{ github.sha }}
+          MSK_BOOTSTRAP: ${{ vars.MSK_BOOTSTRAP }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path("infra/k8s/kustomization.yaml")
+          lines = path.read_text().splitlines()
+          out = []
+          in_images = False
+          for line in lines:
+              if line.startswith("images:"):
+                  in_images = True
+              elif in_images and line and not line[0].isspace() and not line.startswith("-"):
+                  in_images = False
+              if in_images and line.strip() == "newName: rag-lakehouse-producer":
+                  line = "    newName: " + os.environ["ECR_IMAGE_NAME"]
+              if in_images and line.strip() == "newTag: local":
+                  line = "    newTag: " + os.environ["IMAGE_TAG"]
+              out.append(line)
+          path.write_text("\n".join(out) + "\n")
+          PY
+
+          schema_id=$(aws glue get-schema-version \
+            --schema-id SchemaName=document_event,RegistryName=rag-demo \
+            --schema-version-number LatestVersion=true \
+            --query SchemaVersionId --output text)
+          if [ -z "$schema_id" ] || [ "$schema_id" = "None" ]; then
+            echo "Glue schema version for document_event was not found." >&2
+            exit 1
+          fi
+          python3 - "$schema_id" <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          path = Path("infra/k8s/producer-job.yaml")
+          text = path.read_text().replace(
+              "REPLACE_WITH_GLUE_SCHEMA_VERSION_ID",
+              sys.argv[1],
+          )
+          brokers = os.environ.get("MSK_BOOTSTRAP", "")
+          if brokers:
+              text = text.replace("REPLACE_WITH_MSK_BOOTSTRAP", brokers)
+          path.write_text(text)
+          PY
+          if [ -z "${MSK_BOOTSTRAP}" ]; then
+            echo "MSK_BOOTSTRAP is unset. The Job is applied with placeholder brokers and cannot publish until MSK exists."
+          fi
+
+      - name: Apply the producer and its dashboard
+        run: |
+          aws eks update-kubeconfig --name rag-demo --region us-east-1
+          if kubectl get namespace rag >/dev/null 2>&1; then
+            kubectl -n rag delete job producer --ignore-not-found
+          fi
+          kubectl apply -k infra/k8s
+          kubectl -n rag rollout status deploy/prometheus --timeout=180s
+          kubectl -n rag rollout status deploy/grafana --timeout=180s
+          {
+            echo "## Producer deploy"
+            echo
+            echo "Image \`${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/rag-demo-producer:${{ github.sha }}\` is on the cluster."
+            echo "Grafana is in namespace \`rag\`. \`kubectl -n rag port-forward svc/grafana 3000:3000\` opens the Producer dashboard."
+            echo "The producer publishes once \`BROKERS\` is an MSK bootstrap string. Set the repository variable \`MSK_BOOTSTRAP\` to fill it on the next deploy."
+          } >> "$GITHUB_STEP_SUMMARY"

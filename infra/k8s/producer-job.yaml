@@ -1,0 +1,68 @@
+# In-cluster producer. The deploy job rewrites the image to the ECR URI
+# and fills SCHEMA_VERSION_ID from Glue. BROKERS stays a placeholder until
+# MSK exists, or until the repository variable MSK_BOOTSTRAP is set.
+# The IRSA role annotation is added with the MSK stack. MSK is in private subnets,
+# so this Job is the process that can reach the brokers.
+# Publish settings match the local producer: 300 events, a random pause, and the
+# same delete chance. Metrics stay on :9095 until the Job is deleted.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rag
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: producer
+  namespace: rag
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: producer
+  namespace: rag
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: producer
+    spec:
+      serviceAccountName: producer
+      restartPolicy: Never
+      containers:
+        - name: producer
+          image: rag-lakehouse-producer:local
+          imagePullPolicy: IfNotPresent
+          args:
+            - --brokers=$(BROKERS)
+            - --security=aws-msk-iam
+            - --glue-schema-version=$(SCHEMA_VERSION_ID)
+            - --input=/corpus
+          ports:
+            - name: metrics
+              containerPort: 9095
+          env:
+            - name: BROKERS
+              value: REPLACE_WITH_MSK_BOOTSTRAP
+            - name: SCHEMA_VERSION_ID
+              value: REPLACE_WITH_GLUE_SCHEMA_VERSION_ID
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: producer
+  namespace: rag
+spec:
+  selector:
+    app: producer
+  ports:
+    - name: metrics
+      port: 9095
+      targetPort: metrics

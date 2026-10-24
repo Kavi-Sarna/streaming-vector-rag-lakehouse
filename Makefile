@@ -5,7 +5,7 @@ COMPOSE := docker compose -f infra/compose/docker-compose.yml
 BOOTSTRAP := infra/terraform/bootstrap
 DEMO := infra/terraform/environments/demo
 
-.PHONY: help lint test ci smoke docker-up docker-down docker-health terraform proto-gen backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network seed-data seed-data-keps seed-data-arxiv seed-data-hf producer
+.PHONY: help lint test ci smoke docker-up docker-down docker-health docker-build-producer terraform proto-gen backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network seed-data seed-data-keps seed-data-arxiv seed-data-hf producer
 
 help: ## Show this help
 	@grep -hE '^[a-z0-9-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -47,7 +47,7 @@ tf-bootstrap: ## Create the state bucket and GitHub deploy role
 	terraform -chdir=$(BOOTSTRAP) init -input=false
 	terraform -chdir=$(BOOTSTRAP) apply
 
-tf-network-up: backend-hcl ## Create the VPC, NAT gateway, Glue registry, and EKS cluster
+tf-network-up: backend-hcl ## Create the VPC, NAT gateway, Glue registry, producer ECR repository, and EKS cluster
 	terraform -chdir=$(DEMO) init -backend-config=backend.hcl -input=false
 	terraform -chdir=$(DEMO) apply
 
@@ -59,9 +59,9 @@ tf-bootstrap-down: ## Destroy the state bucket and GitHub role. Run tf-network-d
 	terraform -chdir=$(BOOTSTRAP) init -input=false
 	terraform -chdir=$(BOOTSTRAP) destroy
 
-tf-plan-network: backend-hcl ## Plan the VPC, Glue registry, and EKS cluster. Needs AWS credentials and an applied bootstrap
+tf-plan-network: backend-hcl ## Plan the VPC, Glue registry, producer ECR repository, and EKS cluster. Needs AWS credentials and an applied bootstrap
 	terraform -chdir=$(DEMO) init -backend-config=backend.hcl -input=false
-	terraform -chdir=$(DEMO) plan -target=module.networking -target=module.schema_registry -target=module.compute_eks
+	terraform -chdir=$(DEMO) plan -target=module.networking -target=module.schema_registry -target=module.ecr -target=module.compute_eks
 
 docker-up: ## Start Redpanda, Silo, Redis, Flink, the mock embedder, Prometheus, and Grafana
 	$(COMPOSE) up -d --wait --build
@@ -72,7 +72,11 @@ docker-down: ## Stop the Compose project
 docker-health: ## Check the local stack from the host
 	./scripts/verify-infra-health.sh
 
-seed-data: seed-data-keps seed-data-arxiv seed-data-hf ## Download KEPs, arXiv abstracts, and HuggingFace articles
+docker-build-producer: ## Build the producer image. The image downloads the corpus itself
+	docker build -f infra/docker/producer.Dockerfile -t rag-lakehouse-producer:local .
+
+seed-data: ## Download KEPs, arXiv abstracts, and HuggingFace articles
+	./scripts/seed-corpus.sh
 
 seed-data-keps: ## Download 40 Kubernetes KEPs into testdata/keps
 	./scripts/download-seed-docs.sh

@@ -52,7 +52,7 @@ jobs:
         run: |
           terraform init -backend-config=backend.hcl -input=false
           set +e
-          terraform plan -detailed-exitcode -input=false -out=tfplan -target=module.networking -target=module.schema_registry -target=module.compute_eks
+          terraform plan -detailed-exitcode -input=false -out=tfplan -target=module.networking -target=module.schema_registry -target=module.ecr -target=module.compute_eks
           code=$?
           set -e
           if [ "$code" -eq 1 ]; then
@@ -118,3 +118,30 @@ jobs:
         run: |
           terraform init -backend-config=backend.hcl -input=false
           terraform apply -input=false tfplan
+
+  unblock-deploy:
+    name: Unblock deploy
+    needs: plan
+    if: github.event.pull_request.head.repo.full_name == github.repository && needs.plan.result == 'success' && needs.plan.outputs.changes == 'false'
+    runs-on: ubuntu-latest
+    environment: demo
+    steps:
+      - name: Release approved
+        run: echo "Plan has no changes. Deploy release approved."
+
+  unblock-deploy-after-apply:
+    name: Unblock deploy after apply
+    needs: [plan, apply]
+    if: always() && github.event.pull_request.head.repo.full_name == github.repository && needs.plan.result == 'success' && needs.plan.outputs.changes == 'true' && needs.apply.result == 'success'
+    runs-on: ubuntu-latest
+    environment: demo
+    steps:
+      - name: Release approved
+        run: echo "Apply succeeded. Deploy release approved."
+
+  deploy:
+    name: Deploy
+    needs: [unblock-deploy, unblock-deploy-after-apply]
+    if: always() && (needs.unblock-deploy.result == 'success' || needs.unblock-deploy-after-apply.result == 'success')
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit

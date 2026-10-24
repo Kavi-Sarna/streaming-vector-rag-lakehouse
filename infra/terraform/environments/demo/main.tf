@@ -25,6 +25,12 @@ module "schema_registry" {
   }
 }
 
+module "ecr" {
+  source = "../../modules/ecr"
+
+  name = "${var.name}-producer"
+}
+
 module "compute_eks" {
   source = "../../modules/compute_eks"
 

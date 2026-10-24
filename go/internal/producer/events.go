@@ -16,11 +16,13 @@ type Event struct {
 	Markdown   string
 }
 
-// PlanConfig chooses how many events to build and which documents are deleted.
+// PlanConfig chooses how many events to build, which documents are deleted,
+// and how often an event is published again with the same version.
 type PlanConfig struct {
-	Burst        int
-	DeleteChance float64
-	Rand         *rand.Rand
+	Burst           int
+	DeleteChance    float64
+	DuplicateChance float64
+	Rand            *rand.Rand
 }
 
 // Plan builds burst CDC events. Each document is inserted, then updated.
@@ -39,8 +41,11 @@ func Plan(docs []Doc, tenants []string, cfg PlanConfig) ([]Event, error) {
 	if cfg.DeleteChance < 0 || cfg.DeleteChance > 1 {
 		return nil, fmt.Errorf("delete chance must be from 0 to 1")
 	}
-	if cfg.DeleteChance > 0 && cfg.Rand == nil {
-		return nil, fmt.Errorf("rand is required when delete chance is set")
+	if cfg.DuplicateChance < 0 || cfg.DuplicateChance > 1 {
+		return nil, fmt.Errorf("duplicate chance must be from 0 to 1")
+	}
+	if (cfg.DeleteChance > 0 || cfg.DuplicateChance > 0) && cfg.Rand == nil {
+		return nil, fmt.Errorf("rand is required when delete chance or duplicate chance is set")
 	}
 
 	versions := make([]int64, len(docs))
@@ -60,6 +65,9 @@ func Plan(docs []Doc, tenants []string, cfg PlanConfig) ([]Event, error) {
 			Operation:  op,
 			Markdown:   markdown,
 		})
+		if len(events) < cfg.Burst && duplicateNow(cfg) {
+			events = append(events, events[len(events)-1])
+		}
 	}
 
 	for index, doc := range docs {
@@ -101,4 +109,8 @@ func Plan(docs []Doc, tenants []string, cfg PlanConfig) ([]Event, error) {
 
 func deleteNow(cfg PlanConfig) bool {
 	return cfg.DeleteChance > 0 && cfg.Rand.Float64() < cfg.DeleteChance
+}
+
+func duplicateNow(cfg PlanConfig) bool {
+	return cfg.DuplicateChance > 0 && cfg.Rand.Float64() < cfg.DuplicateChance
 }

@@ -23,6 +23,11 @@ output "schema_registry_name" {
   value       = module.schema_registry.registry_name
 }
 
+output "producer_repository_url" {
+  description = "ECR repository the deploy job pushes the producer image to."
+  value       = module.ecr.repository_url
+}
+
 output "cluster_name" {
   description = "EKS cluster name."
   value       = module.compute_eks.cluster_name

@@ -59,11 +59,13 @@ Local records are the raw Protobuf bytes. A cloud record puts an 18-byte Glue he
 
 ## CDC producer
 
-`make seed-data` downloads three corpora into `testdata/`: 40 Kubernetes enhancement proposals in `keps/`, 40 arXiv abstracts in `arxiv/`, and 40 HuggingFace `ag_news` articles in `hf/`. The HuggingFace export needs `pip install datasets`. `make seed-data-keps`, `make seed-data-arxiv`, and `make seed-data-hf` refresh one source.
+`make seed-data` downloads three corpora into `testdata/`: 40 Kubernetes enhancement proposals in `keps/`, 40 arXiv abstracts in `arxiv/`, and 40 HuggingFace `ag_news` articles in `hf/`. The HuggingFace export needs `pip install -r scripts/requirements-seed.txt`. `make seed-data-keps`, `make seed-data-arxiv`, and `make seed-data-hf` refresh one source.
 
-`make producer` publishes 300 `DocumentEvent` records to `document.events.v1` on `localhost:9092`. Redpanda must already be running. It reads every markdown file under `testdata/`. Each record is raw Protobuf, keyed by the path of the file, such as `keps/sig-node_2000-graceful-node-shutdown`. The pause between records is random, from 200ms to 1.5s, so the run lasts about three to seven minutes. Each file is inserted, then updated, and then deleted about one time in five. Which files are deleted changes every run. The command prints the seed so the same choices can be repeated with `--seed`. Pass `ARGS='--sleep-min=100ms --sleep-max=400ms --burst=30 --delete-chance=0.3'` to change the pace and the delete share. `--sleep-max=0 --rate=50` publishes at a fixed 50 per second. `--security=aws-msk-iam` and `--glue-schema-version` are the MSK path.
+`make producer` publishes 300 `DocumentEvent` records to `document.events.v1` on `localhost:9092`. Redpanda must already be running. It reads every markdown file under `testdata/`. Each record is raw Protobuf, keyed by the path of the file, such as `keps/sig-node_2000-graceful-node-shutdown`. The pause between records is random, from 200ms to 1.5s, so the run lasts about three to seven minutes. Each file is inserted, then updated, and then deleted about one time in five. About one record in five is published again with the same version. That repeat is what the later dedupe step drops. Which files are deleted changes every run. The command prints the seed so the same choices can be repeated with `--seed`. Pass `ARGS='--sleep-min=100ms --sleep-max=400ms --burst=30 --delete-chance=0.3'` to change the pace and the delete share. `--sleep-max=0 --rate=50` publishes at a fixed 50 per second. `--security=aws-msk-iam` and `--glue-schema-version` are the MSK path.
 
-While it publishes, counts are served at `http://localhost:9095/metrics`. Grafana at `http://localhost:3000` shows insert, update, delete, and the publish rate. After the burst, the process keeps serving those counts until Ctrl+C. The steps are in [docs/walkthroughs/02-cdc-event-producer.md](docs/walkthroughs/02-cdc-event-producer.md).
+While it publishes, counts are served at `http://localhost:9095/metrics`. Grafana at `http://localhost:3000` shows insert, update, delete, and the publish rate. After the burst, the process keeps serving those counts until Ctrl+C.
+
+`make docker-build-producer` builds `rag-lakehouse-producer:local`. The image downloads the three corpora while it builds, so the machine does not need markdown files first. On a pull request, `.github/workflows/deploy.yml` runs after you approve the `demo` environment for the release. It builds the image, pushes it to ECR, and applies `infra/k8s/` on the cluster. A plan with changes also waits until Apply has succeeded. The steps are in [docs/walkthroughs/02-cdc-event-producer.md](docs/walkthroughs/02-cdc-event-producer.md).
 
 | Service        | Address                              | What it is                                                                        |
 | -------------- | ------------------------------------ | --------------------------------------------------------------------------------- |
@@ -79,14 +81,15 @@ The object store image is `pgsty/silo`. It speaks the MinIO S3 API. The official
 
 ## AWS network
 
-Two workflows, two different jobs. `ci` never calls AWS. `network` does, and only after the one-time bootstrap below exists.
+`ci` never calls AWS. `network` plans and applies the demo stack, and only after the one-time bootstrap below exists. `deploy` pushes images and applies Kubernetes manifests. When the plan has no changes, Unblock deploy is its own approval. When the plan has changes, that approval waits until Apply has succeeded.
 
 |                           | What runs                                                                        | Creates resources                         |
 | ------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------- |
 | GitHub `ci`               | lint, unit tests, `terraform validate`, Compose smoke                            | No                                        |
-| GitHub `network`          | on a pull request: plan the VPC, Glue registry, and EKS cluster, then print the plan  | Not yet                              |
-| GitHub `network` apply    | only when that plan has changes, after you approve the `demo` environment        | Yes. VPC, one NAT gateway, the Glue registry, the EKS control plane, and two m6i.large nodes |
-| Your laptop               | `make tf-bootstrap` once, and `make tf-network-down` when you are finished       | Bootstrap once. Destroy removes the VPC, the registry, and the cluster |
+| GitHub `network`          | on a pull request: plan the VPC, Glue registry, producer image repository, and EKS cluster, then print the plan | Not yet |
+| GitHub `network` apply    | only when that plan has changes, after you approve the `demo` environment        | Yes. VPC, one NAT gateway, the Glue registry, the producer image repository, the EKS control plane, and two m6i.large nodes |
+| GitHub `deploy`           | after you approve `demo` again for the release. With no plan changes, that is the only gate. With plan changes, it also waits until Apply has succeeded | No new hourly resources. Builds the producer image, pushes it to the repository, and applies the producer, Prometheus, and Grafana |
+| Your laptop               | `make tf-bootstrap` once, and `make tf-network-down` when you are finished       | Bootstrap once. Destroy removes the VPC, the registry, the image repository, and the cluster |
 
 The NAT gateway is about $0.045 per hour. The EKS control plane is about $0.10 per hour, and the two nodes are about $0.192 per hour together. Approving a plan that adds them starts those charges. `make tf-network-down` stops them. The shape is in [docs/architecture/02-cloud-service-map.md](docs/architecture/02-cloud-service-map.md).
 
@@ -97,14 +100,14 @@ aws sts get-caller-identity
 make tf-bootstrap
 ```
 
-`make tf-bootstrap` creates the state bucket `rag-demo-tfstate-<account id>` and the role `rag-demo-github-deploy`. Its state file stays on the laptop at `infra/terraform/bootstrap/terraform.tfstate` (gitignored). Keep that file. Run it again when the role policy changes. The plan calls Glue and EKS, and those calls fail until this apply adds those permissions to the role.
+`make tf-bootstrap` creates the state bucket `rag-demo-tfstate-<account id>` and the role `rag-demo-github-deploy`. Its state file stays on the laptop at `infra/terraform/bootstrap/terraform.tfstate` (gitignored). Keep that file. Run it again when the role policy changes. The plan calls Glue, ECR, and EKS, and those calls fail until this apply adds those permissions to the role. Run it again before the first apply that creates the producer repository, so the role can create that repository and push the image.
 
 Then in the GitHub repository settings:
 
 1. Variables: add `AWS_ACCOUNT_ID` with the 12-digit account id.
-2. Environments: create `demo` and add yourself as a required reviewer.
+2. Environments: create `demo` and add yourself as a required reviewer. Apply and the deploy release both wait on this environment. Approving one does not approve the other.
 
-Open the pull request after those exist. The plan is published on the Actions run. When the plan has changes, approve the `demo` deployment to apply it. A plan with no changes skips that approval. Until you approve a plan that has changes, nothing new is created in the VPC.
+Open the pull request after those exist. The plan is published on the Actions run. When the plan has changes, approve the `demo` deployment to apply it. A plan with no changes skips that approval. Until you approve a plan that has changes, nothing new is created in the VPC. Unblock deploy is the release, and it waits on `demo` too. With an empty plan that approval is the only gate. With a plan that has changes, it waits until Apply has succeeded and then for a second approval of `demo`. Leave it unapproved when you want the producer to stay undeployed.
 
 Bring the network down from the laptop when you are finished. This uses your IAM user, not GitHub:
 

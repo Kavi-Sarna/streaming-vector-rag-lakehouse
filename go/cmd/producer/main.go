@@ -26,6 +26,7 @@ func main() {
 	sleepMax := flag.Duration("sleep-max", 1500*time.Millisecond, "maximum pause between events; 0 uses --rate")
 	burst := flag.Int("burst", 300, "number of events to publish")
 	deleteChance := flag.Float64("delete-chance", 0.2, "chance a document is deleted after it is updated")
+	duplicateChance := flag.Float64("duplicate-chance", 0.2, "chance an event is published again with the same version")
 	seed := flag.Int64("seed", 0, "random seed; 0 uses the current time")
 	tenants := flag.String("tenants", "tenant-alpha,tenant-beta", "comma-separated tenant ids")
 	security := flag.String("security", "plaintext", "plaintext for Redpanda, or aws-msk-iam for MSK Serverless")
@@ -44,9 +45,10 @@ func main() {
 	rng := rand.New(rand.NewPCG(uint64(chosen), uint64(chosen)^0x9e3779b97f4a7c15))
 	fmt.Printf("seed %d\n", chosen)
 	events, err := producer.Plan(docs, producer.SplitList(*tenants), producer.PlanConfig{
-		Burst:        *burst,
-		DeleteChance: *deleteChance,
-		Rand:         rng,
+		Burst:           *burst,
+		DeleteChance:    *deleteChance,
+		DuplicateChance: *duplicateChance,
+		Rand:            rng,
 	})
 	if err != nil {
 		log.Fatal(err)

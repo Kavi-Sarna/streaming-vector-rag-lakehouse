@@ -61,6 +61,27 @@ func TestLoadDocsReadsSubdirectories(t *testing.T) {
 	}
 }
 
+func TestPlanReplaysSameVersion(t *testing.T) {
+	docs := []producer.Doc{{ID: "only", Markdown: "body"}}
+	events, err := producer.Plan(docs, []string{"tenant-alpha"}, producer.PlanConfig{
+		Burst:           4,
+		DuplicateChance: 1,
+		Rand:            rand.New(rand.NewPCG(1, 2)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 4 {
+		t.Fatalf("len = %d", len(events))
+	}
+	if events[0] != events[1] || events[0].Version != 1 || events[0].Operation != v1.Operation_OPERATION_INSERT {
+		t.Fatalf("replayed insert = %+v %+v", events[0], events[1])
+	}
+	if events[2] != events[3] || events[2].Version != 2 || events[2].Operation != v1.Operation_OPERATION_UPDATE {
+		t.Fatalf("replayed update = %+v %+v", events[2], events[3])
+	}
+}
+
 func TestPlanInsertUpdateDelete(t *testing.T) {
 	docs := make([]producer.Doc, 5)
 	for i := range docs {
