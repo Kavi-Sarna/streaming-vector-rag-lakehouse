@@ -25,6 +25,8 @@ make producer ARGS='--seed=1 --burst=30'
 make producer ARGS='--sleep-max=0 --rate=50 --burst=100'
 ```
 
+The producer listens on `http://localhost:9095/metrics` for the whole run. Prometheus, started by `make docker-up`, scrapes that address every 2 seconds. Open `http://localhost:3000` for the Producer dashboard: insert, update, and delete totals, the publish rate, and the cumulative counts. After the burst finishes, the process keeps serving metrics until Ctrl+C, and the dashboard holds the final totals. `--metrics-addr=` turns the endpoint off and lets the process exit when the burst finishes.
+
 A cloud run uses MSK Serverless and the Glue frame. The schema version id is the one `aws glue list-schema-versions` prints for `document_event`. The cluster has to be up, and the broker string is the MSK bootstrap servers on port 9098.
 
 ```sh
