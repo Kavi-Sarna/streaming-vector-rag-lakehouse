@@ -28,13 +28,14 @@ type PublishConfig struct {
 	SleepMin          time.Duration
 	SleepMax          time.Duration
 	Rand              *rand.Rand
+	Metrics           *Metrics
 	Events            []Event
 }
 
 // Publish writes events to Kafka. An empty Glue schema version sends raw Protobuf.
 // A positive SleepMax pauses a random duration between events. SleepMax 0 uses Rate.
 func Publish(ctx context.Context, cfg PublishConfig) error {
-	if cfg.SleepMin < 0 || cfg.SleepMax < cfg.SleepMin {
+	if cfg.SleepMin < 0 || (cfg.SleepMax > 0 && cfg.SleepMax < cfg.SleepMin) {
 		return fmt.Errorf("sleep-min must be from 0 through sleep-max")
 	}
 	if cfg.SleepMax > 0 && cfg.Rand == nil {
@@ -98,7 +99,9 @@ func Publish(ctx context.Context, cfg PublishConfig) error {
 		if err := result.FirstErr(); err != nil {
 			return fmt.Errorf("produce %s v%d: %w", event.DocumentID, event.Version, err)
 		}
-		fmt.Printf("%s %s v%d %s\n", event.TenantID, event.DocumentID, event.Version, operationName(event.Operation))
+		operation := operationName(event.Operation)
+		cfg.Metrics.Event(operation)
+		fmt.Printf("%s %s v%d %s\n", event.TenantID, event.DocumentID, event.Version, operation)
 	}
 	return nil
 }

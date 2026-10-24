@@ -57,6 +57,6 @@ GitHub Actions and Buildkite files stay at the repository root, because those pr
 
 ## Local topology
 
-`make docker-up` starts Redpanda, Silo, Redis Stack, a Flink JobManager and TaskManager, and the mock embedder. Silo is the local object store: the official MinIO image is no longer anonymously pullable, and Silo serves the same S3 API. The bucket is `lakehouse`.
+`make docker-up` starts Redpanda, Silo, Redis Stack, a Flink JobManager and TaskManager, the mock embedder, Prometheus, and Grafana. Silo is the local object store: the official MinIO image is no longer anonymously pullable, and Silo serves the same S3 API. The bucket is `lakehouse`.
 
-The producer, the Flink job, the sinks, and the query gateway are not part of this stack. Flink is running and idle. Redpanda has the topic `document.events.v1`. Host clients use `localhost:9092`. Containers on the Compose network use `redpanda:9093`.
+The producer, the Flink job, the sinks, and the query gateway are not part of this stack. The producer runs on the host and exposes publish counts on port 9095. Prometheus scrapes that port. Grafana at `http://localhost:3000` shows those counts. Flink is running and idle. Redpanda has the topic `document.events.v1`. Host clients use `localhost:9092`. Containers on the Compose network use `redpanda:9093`.

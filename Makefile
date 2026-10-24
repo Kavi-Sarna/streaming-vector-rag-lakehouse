@@ -63,7 +63,7 @@ tf-plan-network: backend-hcl ## Plan the VPC, Glue registry, and EKS cluster. Ne
 	terraform -chdir=$(DEMO) init -backend-config=backend.hcl -input=false
 	terraform -chdir=$(DEMO) plan -target=module.networking -target=module.schema_registry -target=module.compute_eks
 
-docker-up: ## Start Redpanda, Silo, Redis Stack, Flink, and the mock embedder
+docker-up: ## Start Redpanda, Silo, Redis, Flink, the mock embedder, Prometheus, and Grafana
 	$(COMPOSE) up -d --wait --build
 
 docker-down: ## Stop the Compose project

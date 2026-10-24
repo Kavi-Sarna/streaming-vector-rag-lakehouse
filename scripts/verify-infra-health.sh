@@ -58,4 +58,16 @@ if body.get("dimensions") != 384 or len(vector) != 384:
 print("ok: mock embedder 384 dimensions")
 PY
 
+curl -fsS http://127.0.0.1:9090/-/ready >/dev/null
+echo "ok: prometheus localhost:9090"
+
+python3 - <<'PY'
+import json, urllib.request
+with urllib.request.urlopen("http://127.0.0.1:3000/api/health", timeout=5) as response:
+    body = json.load(response)
+if body.get("database") != "ok":
+    raise SystemExit(f"grafana health {body}")
+print("ok: grafana localhost:3000")
+PY
+
 echo "local stack is healthy"

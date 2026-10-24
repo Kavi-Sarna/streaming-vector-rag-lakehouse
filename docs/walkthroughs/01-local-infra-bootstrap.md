@@ -15,6 +15,8 @@ make docker-down
 - Redis Stack answers `PING` on `localhost:6379`.
 - Flink at `http://localhost:8081` has one TaskManager and no submitted job.
 - `POST http://localhost:8091/embed` with `{"text":"hello"}` returns 384 dimensions.
+- Prometheus is ready at `http://localhost:9090`. It scrapes the host producer on port 9095 once that process is running.
+- Grafana is ready at `http://localhost:3000`. The home dashboard is Producer. No login is required.
 
 ```sh
 curl -s http://127.0.0.1:8091/embed \

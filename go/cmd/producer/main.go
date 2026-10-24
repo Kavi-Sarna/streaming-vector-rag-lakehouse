@@ -9,7 +9,10 @@ import (
 	"math/rand/v2"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/Kavi-Sarna/streaming-vector-rag-lakehouse/go/internal/producer"
 )
@@ -27,6 +30,7 @@ func main() {
 	tenants := flag.String("tenants", "tenant-alpha,tenant-beta", "comma-separated tenant ids")
 	security := flag.String("security", "plaintext", "plaintext for Redpanda, or aws-msk-iam for MSK Serverless")
 	glueSchemaVersion := flag.String("glue-schema-version", "", "Glue schema version UUID; empty sends raw Protobuf")
+	metricsAddr := flag.String("metrics-addr", ":9095", "Prometheus listen address; empty disables metrics")
 	flag.Parse()
 
 	docs, err := producer.LoadDocs(*input)
@@ -48,6 +52,20 @@ func main() {
 		log.Fatal(err)
 	}
 
+	var metrics *producer.Metrics
+	if *metricsAddr != "" {
+		metrics, err = producer.NewMetrics(prometheus.DefaultRegisterer)
+		if err != nil {
+			log.Fatal(err)
+		}
+		server, err := producer.ListenAndServeMetrics(*metricsAddr, prometheus.DefaultGatherer)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer func() { _ = server.Close() }()
+		fmt.Printf("metrics %s\n", metricsURL(*metricsAddr))
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	err = producer.Publish(ctx, producer.PublishConfig{
@@ -59,10 +77,23 @@ func main() {
 		SleepMin:          *sleepMin,
 		SleepMax:          *sleepMax,
 		Rand:              rng,
+		Metrics:           metrics,
 		Events:            events,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 	fmt.Printf("published %d events to %s\n", len(events), *topic)
+	if *metricsAddr != "" {
+		fmt.Printf("dashboard http://localhost:3000\n")
+		fmt.Printf("metrics stay up until interrupt\n")
+		<-ctx.Done()
+	}
+}
+
+func metricsURL(addr string) string {
+	if strings.HasPrefix(addr, ":") {
+		return "http://localhost" + addr + "/metrics"
+	}
+	return "http://" + addr + "/metrics"
 }
