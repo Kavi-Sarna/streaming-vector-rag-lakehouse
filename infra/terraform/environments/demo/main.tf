@@ -24,3 +24,15 @@ module "schema_registry" {
     document_event = file("${path.module}/../../../../api/proto/v1/document_event.proto")
   }
 }
+
+module "compute_eks" {
+  source = "../../modules/compute_eks"
+
+  name               = var.name
+  private_subnet_ids = module.networking.private_subnet_ids
+  cluster_subnet_ids = concat(
+    module.networking.public_subnet_ids,
+    module.networking.private_subnet_ids,
+  )
+  cluster_admin_principal_arns = var.cluster_admin_principal_arns
+}

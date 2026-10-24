@@ -22,3 +22,13 @@ output "schema_registry_name" {
   description = "Glue Schema Registry that holds the Protobuf contracts."
   value       = module.schema_registry.registry_name
 }
+
+output "cluster_name" {
+  description = "EKS cluster name."
+  value       = module.compute_eks.cluster_name
+}
+
+output "cluster_endpoint" {
+  description = "Public Kubernetes API endpoint."
+  value       = module.compute_eks.cluster_endpoint
+}

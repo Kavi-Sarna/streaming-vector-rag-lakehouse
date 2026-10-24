@@ -57,13 +57,13 @@ Local records are the raw Protobuf bytes. A cloud record puts an 18-byte Glue he
 
 `make docker-up` starts the backing services and leaves them running. `make docker-health` checks them from the host. `make docker-down` stops them. No producer, Flink job, or query gateway is submitted.
 
-| Service        | Address                         | What it is                                                                 |
-| -------------- | ------------------------------- | -------------------------------------------------------------------------- |
-| Redpanda       | `localhost:9092`                | Kafka for the host. Flink uses `redpanda:9093` on the Compose network. Topic `document.events.v1`. |
-| Silo           | `localhost:9000`, console `:9001` | MinIO S3 API. User `minio`, password `minio12345`. Bucket `lakehouse`. |
-| Redis Stack    | `localhost:6379`                | Vector index and cache. No password.                                       |
-| Flink          | `http://localhost:8081`         | JobManager and one TaskManager. No job is running.                         |
-| Mock embedder  | `http://localhost:8091/embed`   | `POST {"text":"..."}` returns a deterministic 384-dimension vector.       |
+| Service        | Address                              | What it is                                                                        |
+| -------------- | ------------------------------------ | --------------------------------------------------------------------------------- |
+| Redpanda       | `localhost:9092`                     | Kafka for the host. Flink uses `redpanda:9093` on the Compose network. Topic `document.events.v1`. |
+| Silo           | `localhost:9000`, console `:9001`    | MinIO S3 API. User `minio`, password `minio12345`. Bucket `lakehouse`.            |
+| Redis Stack    | `localhost:6379`                     | Vector index and cache. No password.                                              |
+| Flink          | `http://localhost:8081`              | JobManager and one TaskManager. No job is running.                                |
+| Mock embedder  | `http://localhost:8091/embed`        | `POST {"text":"..."}` returns a deterministic 384-dimension vector.               |
 
 The object store image is `pgsty/silo`. It speaks the MinIO S3 API. The official MinIO image is no longer anonymously pullable.
 
@@ -71,14 +71,14 @@ The object store image is `pgsty/silo`. It speaks the MinIO S3 API. The official
 
 Two workflows, two different jobs. `ci` never calls AWS. `network` does, and only after the one-time bootstrap below exists.
 
-|                           | What runs                                                                     | Creates resources                         |
-| ------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------- |
-| GitHub `ci`               | lint, unit tests, `terraform validate`, Compose smoke                         | No                                        |
-| GitHub `network`          | on a pull request: plan the VPC and the Glue registry, then print the plan    | Not yet                                   |
-| GitHub `network` apply    | only when that plan has changes, after you approve the `demo` environment     | Yes. VPC, one NAT gateway, and the Glue registry |
-| Your laptop               | `make tf-bootstrap` once, and `make tf-network-down` when you are finished    | Bootstrap once. Destroy removes the VPC and the registry |
+|                           | What runs                                                                        | Creates resources                         |
+| ------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------- |
+| GitHub `ci`               | lint, unit tests, `terraform validate`, Compose smoke                            | No                                        |
+| GitHub `network`          | on a pull request: plan the VPC, Glue registry, and EKS cluster, then print the plan  | Not yet                              |
+| GitHub `network` apply    | only when that plan has changes, after you approve the `demo` environment        | Yes. VPC, one NAT gateway, the Glue registry, the EKS control plane, and two m6i.large nodes |
+| Your laptop               | `make tf-bootstrap` once, and `make tf-network-down` when you are finished       | Bootstrap once. Destroy removes the VPC, the registry, and the cluster |
 
-The NAT gateway is about $0.045 per hour. Approving the deployment starts that charge. `make tf-network-down` stops it. No instances are launched. The shape is in [docs/architecture/02-cloud-service-map.md](docs/architecture/02-cloud-service-map.md).
+The NAT gateway is about $0.045 per hour. The EKS control plane is about $0.10 per hour, and the two nodes are about $0.192 per hour together. Approving a plan that adds them starts those charges. `make tf-network-down` stops them. The shape is in [docs/architecture/02-cloud-service-map.md](docs/architecture/02-cloud-service-map.md).
 
 Do this once, before the pull request. Use an IAM user that can create S3, IAM, and VPC resources in `us-east-1`. Root is only for opening the account.
 
@@ -87,7 +87,7 @@ aws sts get-caller-identity
 make tf-bootstrap
 ```
 
-`make tf-bootstrap` creates the state bucket `rag-demo-tfstate-<account id>` and the role `rag-demo-github-deploy`. Its state file stays on the laptop at `infra/terraform/bootstrap/terraform.tfstate` (gitignored). Keep that file. Run it again when the role policy changes. The network plan calls Glue, and that call fails until this apply adds the Glue permissions to the role.
+`make tf-bootstrap` creates the state bucket `rag-demo-tfstate-<account id>` and the role `rag-demo-github-deploy`. Its state file stays on the laptop at `infra/terraform/bootstrap/terraform.tfstate` (gitignored). Keep that file. Run it again when the role policy changes. The plan calls Glue and EKS, and those calls fail until this apply adds those permissions to the role.
 
 Then in the GitHub repository settings:
 
