@@ -23,6 +23,16 @@ output "schema_registry_name" {
   value       = module.schema_registry.registry_name
 }
 
+output "msk_bootstrap_brokers" {
+  description = "MSK Serverless IAM bootstrap brokers."
+  value       = module.msk.bootstrap_brokers_sasl_iam
+}
+
+output "producer_role_arn" {
+  description = "IAM role for the producer service account."
+  value       = module.msk.producer_role_arn
+}
+
 output "producer_repository_url" {
   description = "ECR repository the deploy job pushes the producer image to."
   value       = module.ecr.repository_url

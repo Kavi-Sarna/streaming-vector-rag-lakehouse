@@ -47,7 +47,7 @@ tf-bootstrap: ## Create the state bucket and GitHub deploy role
 	terraform -chdir=$(BOOTSTRAP) init -input=false
 	terraform -chdir=$(BOOTSTRAP) apply
 
-tf-network-up: backend-hcl ## Create the VPC, NAT gateway, Glue registry, producer ECR repository, and EKS cluster
+tf-network-up: backend-hcl ## Create the VPC, NAT gateway, Glue registry, producer ECR repository, EKS cluster, and MSK Serverless
 	terraform -chdir=$(DEMO) init -backend-config=backend.hcl -input=false
 	terraform -chdir=$(DEMO) apply
 
@@ -59,9 +59,9 @@ tf-bootstrap-down: ## Destroy the state bucket and GitHub role. Run tf-network-d
 	terraform -chdir=$(BOOTSTRAP) init -input=false
 	terraform -chdir=$(BOOTSTRAP) destroy
 
-tf-plan-network: backend-hcl ## Plan the VPC, Glue registry, producer ECR repository, and EKS cluster. Needs AWS credentials and an applied bootstrap
+tf-plan-network: backend-hcl ## Plan the VPC, Glue registry, producer ECR repository, EKS cluster, and MSK Serverless. Needs AWS credentials and an applied bootstrap
 	terraform -chdir=$(DEMO) init -backend-config=backend.hcl -input=false
-	terraform -chdir=$(DEMO) plan -target=module.networking -target=module.schema_registry -target=module.ecr -target=module.compute_eks
+	terraform -chdir=$(DEMO) plan -target=module.networking -target=module.schema_registry -target=module.ecr -target=module.compute_eks -target=module.msk
 
 docker-up: ## Start Redpanda, Silo, Redis, Flink, the mock embedder, Prometheus, and Grafana
 	$(COMPOSE) up -d --wait --build

@@ -3,12 +3,15 @@ package producer
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/twmb/franz-go/pkg/kadm"
+	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl"
 	franzaws "github.com/twmb/franz-go/pkg/sasl/aws"
@@ -76,6 +79,10 @@ func Publish(ctx context.Context, cfg PublishConfig) error {
 	}
 	defer client.Close()
 
+	if err := ensureTopic(ctx, client, cfg.Topic); err != nil {
+		return err
+	}
+
 	var pace *time.Ticker
 	if cfg.SleepMax == 0 && cfg.Rate > 0 {
 		pace = time.NewTicker(time.Second / time.Duration(cfg.Rate))
@@ -104,6 +111,22 @@ func Publish(ctx context.Context, cfg PublishConfig) error {
 		fmt.Printf("%s %s v%d %s\n", event.TenantID, event.DocumentID, event.Version, operation)
 	}
 	return nil
+}
+
+// ensureTopic creates the topic when it is missing. One partition matches the
+// local Redpanda topic. Replication factor -1 uses the broker default, which
+// is 1 on Redpanda and the managed factor on MSK Serverless.
+func ensureTopic(ctx context.Context, client *kgo.Client, topic string) error {
+	_, err := kadm.NewClient(client).CreateTopic(ctx, 1, -1, nil, topic)
+	if err != nil && !topicAlreadyExists(err) {
+		return fmt.Errorf("create topic %s: %w", topic, err)
+	}
+	return nil
+}
+
+func topicAlreadyExists(err error) bool {
+	var kafkaErr *kerr.Error
+	return errors.As(err, &kafkaErr) && kafkaErr.Code == kerr.TopicAlreadyExists.Code
 }
 
 func waitBeforeEvent(ctx context.Context, cfg PublishConfig, pace *time.Ticker) error {

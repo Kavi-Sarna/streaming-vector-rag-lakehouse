@@ -31,6 +31,17 @@ module "ecr" {
   name = "${var.name}-producer"
 }
 
+module "msk" {
+  source = "../../modules/msk"
+
+  name                     = var.name
+  vpc_id                   = module.networking.vpc_id
+  subnet_ids               = module.networking.private_subnet_ids
+  client_security_group_id = module.compute_eks.cluster_security_group_id
+  oidc_provider_arn        = module.compute_eks.oidc_provider_arn
+  oidc_issuer              = module.compute_eks.oidc_issuer
+}
+
 module "compute_eks" {
   source = "../../modules/compute_eks"
 

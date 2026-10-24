@@ -35,12 +35,12 @@ make docker-build-producer
 
 That builds `rag-lakehouse-producer:local`. The container uses the same defaults as `make producer`: 300 events, a random pause from 200ms to 1.5s, a delete about one time in five, and a duplicate replay about one time in five. It serves `rag_producer_events_total` on port 9095 and stays up after the burst, the same way the local process does.
 
-`infra/k8s/` is that producer plus Prometheus and Grafana in namespace `rag`. `.github/workflows/network.yml` plans and applies the stack. Unblock deploy waits on the same `demo` environment as Apply. Approving Apply does not approve the release. When the plan has no changes, that release approval is the only gate. When the plan has changes, it also waits until Apply has succeeded. Approving it runs `.github/workflows/deploy.yml`, which builds the linux/amd64 image, pushes `rag-demo-producer:<commit>` to ECR, writes the current Glue schema version into the Job, and runs `kubectl apply -k infra/k8s`. Leave Apply and Unblock deploy unapproved to keep the cluster down and the producer undeployed.
+`infra/k8s/` is that producer plus Prometheus and Grafana in namespace `rag`. `.github/workflows/network.yml` plans and applies the stack, including MSK Serverless. Unblock deploy waits on the same `demo` environment as Apply. Approving Apply does not approve the release. When the plan has no changes, that release approval is the only gate. When the plan has changes, it also waits until Apply has succeeded. Approving it runs `.github/workflows/deploy.yml`, which builds the linux/amd64 image, pushes `rag-demo-producer:<commit>` to ECR, writes the Glue schema version and the MSK bootstrap brokers into the Job, and runs `kubectl apply -k infra/k8s`. The producer service account assumes `rag-demo-producer`. The first publish creates `document.events.v1` if it is missing.
 
-MSK is not part of this stack. The Job's `BROKERS` value stays `REPLACE_WITH_MSK_BOOTSTRAP` until the repository variable `MSK_BOOTSTRAP` is set to the MSK bootstrap servers on port 9098. The pod is still applied. It cannot publish until that value is real. The IRSA role for the producer comes with MSK.
+Approve both `demo` reviews on this pull request when you want to watch the cloud producer. Then open the dashboard:
 
 ```sh
 kubectl -n rag port-forward svc/grafana 3000:3000
 ```
 
-Open `http://localhost:3000`. The Producer dashboard is the same one as the local stack. `kubectl delete job producer -n rag` stops the producer.
+Open `http://localhost:3000`. The Producer dashboard shows insert, update, delete, and the replayed copies. `kubectl delete job producer -n rag` stops the producer. `make tf-network-down` deletes MSK with the rest of the stack. Leave both reviews unapproved when you want the cluster to stay down.
