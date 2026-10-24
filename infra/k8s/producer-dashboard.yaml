@@ -1,4 +1,5 @@
-# Same Producer dashboard as the local stack. No load balancer: port-forward Grafana.
+# Same Producer dashboard as the local stack.
+# Grafana is a NodePort. The cloud load balancer sends port 80 to node port 30080.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -116,9 +117,11 @@ metadata:
   name: grafana
   namespace: rag
 spec:
+  type: NodePort
   selector:
     app: grafana
   ports:
     - name: http
       port: 3000
       targetPort: http
+      nodePort: 30080

@@ -86,12 +86,12 @@ The object store image is `pgsty/silo`. It speaks the MinIO S3 API. The official
 |                           | What runs                                                                        | Creates resources                         |
 | ------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------- |
 | GitHub `ci`               | lint, unit tests, `terraform validate`, Compose smoke                            | No                                        |
-| GitHub `network`          | on a pull request: plan the VPC, Glue registry, producer image repository, EKS cluster, and MSK Serverless, then print the plan | Not yet |
-| GitHub `network` apply    | only when that plan has changes, after you approve the `demo` environment        | Yes. VPC, one NAT gateway, the Glue registry, the producer image repository, the EKS control plane, two m6i.large nodes, and MSK Serverless |
+| GitHub `network`          | on a pull request: plan the VPC, Glue registry, producer image repository, EKS cluster, MSK Serverless, and the Grafana load balancer, then print the plan | Not yet |
+| GitHub `network` apply    | only when that plan has changes, after you approve the `demo` environment        | Yes. VPC, one NAT gateway, the Glue registry, the producer image repository, the EKS control plane, two m6i.large nodes, MSK Serverless, and a network load balancer for Grafana |
 | GitHub `deploy`           | after you approve `demo` again for the release. With no plan changes, that is the only gate. With plan changes, it also waits until Apply has succeeded | No new hourly resources. Builds the producer image, pushes it to the repository, and applies the producer, Prometheus, and Grafana |
-| Your laptop               | `make tf-bootstrap` once, and `make tf-network-down` when you are finished       | Bootstrap once. Destroy removes the VPC, the registry, the image repository, MSK, and the cluster |
+| Your laptop               | `make tf-bootstrap` once, `make open-grafana` after the deploy, and `make tf-network-down` when you are finished | Bootstrap once. Destroy removes the VPC, the registry, the image repository, MSK, the Grafana load balancer, and the cluster |
 
-The NAT gateway is about $0.045 per hour. The EKS control plane is about $0.10 per hour, and the two nodes are about $0.192 per hour together. MSK Serverless is about $0.10 per hour plus a small charge for its one partition and the data written. Approving a plan that adds them starts those charges. `make tf-network-down` stops them. The shape is in [docs/architecture/02-cloud-service-map.md](docs/architecture/02-cloud-service-map.md).
+The NAT gateway is about $0.045 per hour. The EKS control plane is about $0.10 per hour, and the two nodes are about $0.192 per hour together. MSK Serverless is about $0.10 per hour plus a small charge for its one partition and the data written. The Grafana load balancer is about $0.023 per hour plus a small charge for the traffic. Approving a plan that adds them starts those charges. `make tf-network-down` stops them. The shape is in [docs/architecture/02-cloud-service-map.md](docs/architecture/02-cloud-service-map.md).
 
 Do this once, before the pull request. Use an IAM user that can create S3, IAM, and VPC resources in `us-east-1`. Root is only for opening the account.
 
@@ -100,7 +100,7 @@ aws sts get-caller-identity
 make tf-bootstrap
 ```
 
-`make tf-bootstrap` creates the state bucket `rag-demo-tfstate-<account id>` and the role `rag-demo-github-deploy`. Its state file stays on the laptop at `infra/terraform/bootstrap/terraform.tfstate` (gitignored). Keep that file. Run it again when the role policy changes. The plan calls Glue, ECR, EKS, and MSK, and those calls fail until this apply adds those permissions to the role. Run it again before approving a plan that creates MSK, so the role can create the cluster and the producer role.
+`make tf-bootstrap` creates the state bucket `rag-demo-tfstate-<account id>` and the role `rag-demo-github-deploy`. Its state file stays on the laptop at `infra/terraform/bootstrap/terraform.tfstate` (gitignored). Keep that file. Run it again when the role policy changes. The plan calls Glue, ECR, EKS, MSK, and Elastic Load Balancing, and those calls fail until this apply adds those permissions to the role. Run it again before approving a plan that creates the Grafana load balancer, so the role can create that load balancer and attach it to the nodes.
 
 Then in the GitHub repository settings:
 

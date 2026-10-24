@@ -35,12 +35,18 @@ make docker-build-producer
 
 That builds `rag-lakehouse-producer:local`. The container uses the same defaults as `make producer`: 300 events, a random pause from 200ms to 1.5s, a delete about one time in five, and a duplicate replay about one time in five. It serves `rag_producer_events_total` on port 9095 and stays up after the burst, the same way the local process does.
 
-`infra/k8s/` is that producer plus Prometheus and Grafana in namespace `rag`. `.github/workflows/network.yml` plans and applies the stack, including MSK Serverless. Unblock deploy waits on the same `demo` environment as Apply. Approving Apply does not approve the release. When the plan has no changes, that release approval is the only gate. When the plan has changes, it also waits until Apply has succeeded. Approving it runs `.github/workflows/deploy.yml`, which builds the linux/amd64 image, pushes `rag-demo-producer:<commit>` to ECR, writes the Glue schema version and the MSK bootstrap brokers into the Job, and runs `kubectl apply -k infra/k8s`. The producer service account assumes `rag-demo-producer`. The first publish creates `document.events.v1` if it is missing.
+`infra/k8s/` is that producer plus Prometheus and Grafana in namespace `rag`. `.github/workflows/network.yml` plans and applies the stack, including MSK Serverless and the Grafana load balancer. Unblock deploy waits on the same `demo` environment as Apply. Approving Apply does not approve the release. When the plan has no changes, that release approval is the only gate. When the plan has changes, it also waits until Apply has succeeded. Approving it runs `.github/workflows/deploy.yml`, which builds the linux/amd64 image, pushes `rag-demo-producer:<commit>` to ECR, writes the Glue schema version and the MSK bootstrap brokers into the Job, and runs `kubectl apply -k infra/k8s`. The producer service account assumes `rag-demo-producer`. The first publish creates `document.events.v1` if it is missing.
 
-Approve both `demo` reviews on this pull request when you want to watch the cloud producer. Then open the dashboard:
+Approve both `demo` reviews when you want to watch the cloud producer. Run `make tf-bootstrap` first so the GitHub role can create the Grafana load balancer. After Apply and the deploy release succeed, run:
+
+```sh
+make open-grafana
+```
+
+That allows this machine's public IPv4 address and prints the dashboard URL. Grafana opens in the browser with no login. The load balancer accepts only that address. It can take a minute after the deploy job for the load balancer to see Grafana. Run `make open-grafana` again if your address changes. `make close-grafana` removes the rule.
 
 ```sh
 kubectl -n rag port-forward svc/grafana 3000:3000
 ```
 
-Open `http://localhost:3000`. The Producer dashboard shows insert, update, delete, and the replayed copies. `kubectl delete job producer -n rag` stops the producer. `make tf-network-down` deletes MSK with the rest of the stack. Leave both reviews unapproved when you want the cluster to stay down.
+That still opens the same dashboard at `http://localhost:3000`. The Producer dashboard shows insert, update, delete, and the replayed copies. `kubectl delete job producer -n rag` stops the producer. `make tf-network-down` deletes the load balancer and MSK with the rest of the stack. Leave both reviews unapproved when you want the cluster to stay down.

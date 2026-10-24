@@ -47,3 +47,8 @@ output "cluster_endpoint" {
   description = "Public Kubernetes API endpoint."
   value       = module.compute_eks.cluster_endpoint
 }
+
+output "grafana_url" {
+  description = "Grafana. make open-grafana allows this machine, then open this URL."
+  value       = "http://${module.grafana_access.dns_name}"
+}

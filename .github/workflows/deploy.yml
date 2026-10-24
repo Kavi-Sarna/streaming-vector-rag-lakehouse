@@ -119,6 +119,12 @@ jobs:
             echo "## Producer deploy"
             echo
             echo "Image \`${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/rag-demo-producer:${{ github.sha }}\` publishes to MSK topic \`document.events.v1\`."
-            echo "Grafana is in namespace \`rag\`. \`kubectl -n rag port-forward svc/grafana 3000:3000\` opens the Producer dashboard."
+            dns=$(aws elbv2 describe-load-balancers --names rag-demo-grafana --region us-east-1 --query 'LoadBalancers[0].DNSName' --output text 2>/dev/null || true)
+            if [ -n "$dns" ] && [ "$dns" != "None" ]; then
+              echo "Run \`make open-grafana\`, then open http://${dns}. The load balancer can take a minute to see Grafana."
+            else
+              echo "Run \`make open-grafana\` after the load balancer exists."
+            fi
+            echo "\`kubectl -n rag port-forward svc/grafana 3000:3000\` still opens the dashboard at http://localhost:3000."
             echo "\`kubectl delete job producer -n rag\` stops the producer."
           } >> "$GITHUB_STEP_SUMMARY"
