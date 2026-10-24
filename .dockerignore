@@ -1,0 +1,7 @@
+.git
+.github
+**/.terraform
+**/terraform.tfstate
+**/terraform.tfstate.*
+Implementation Plan*
+testdata

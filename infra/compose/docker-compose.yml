@@ -107,8 +107,8 @@ services:
 
   mock-embedder:
     build:
-      context: ../../go
-      dockerfile: cmd/mock-embedder/Dockerfile
+      context: ../..
+      dockerfile: infra/docker/mock-embedder.Dockerfile
     image: rag-lakehouse-mock-embedder:local
     ports:
       - "8091:8080"
@@ -152,7 +152,9 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../k8s/grafana/datasource.yml:/etc/grafana/provisioning/datasources/prometheus.yml:ro
+      - ../k8s/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ../k8s/grafana/producer.json:/etc/grafana/provisioning/dashboards/json/producer.json:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
       interval: 5s

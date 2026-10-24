@@ -72,8 +72,8 @@ data "aws_iam_policy_document" "github_deploy" {
   }
 
   # The demo composition's resources today are the VPC, the Glue schema
-  # registry, and the EKS cluster. Later modules extend this policy when
-  # they add MSK and the lakehouse bucket.
+  # registry, the producer ECR repository, and the EKS cluster. Later
+  # modules extend this policy when they add MSK and the lakehouse bucket.
   statement {
     sid       = "Network"
     effect    = "Allow"
@@ -114,6 +114,32 @@ data "aws_iam_policy_document" "github_deploy" {
       "iam:CreateServiceLinkedRole",
       "iam:GetPolicy",
       "iam:GetPolicyVersion",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "ECR"
+    effect = "Allow"
+    actions = [
+      "ecr:GetAuthorizationToken",
+      "ecr:CreateRepository",
+      "ecr:DeleteRepository",
+      "ecr:DescribeRepositories",
+      "ecr:DescribeImages",
+      "ecr:ListTagsForResource",
+      "ecr:TagResource",
+      "ecr:UntagResource",
+      "ecr:PutImage",
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:CompleteLayerUpload",
+      "ecr:InitiateLayerUpload",
+      "ecr:UploadLayerPart",
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:PutLifecyclePolicy",
+      "ecr:GetLifecyclePolicy",
+      "ecr:DeleteLifecyclePolicy",
     ]
     resources = ["*"]
   }
