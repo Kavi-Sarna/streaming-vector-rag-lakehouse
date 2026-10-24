@@ -17,3 +17,8 @@ output "availability_zones" {
   description = "AZs occupied by the subnets."
   value       = module.networking.availability_zones
 }
+
+output "schema_registry_name" {
+  description = "Glue Schema Registry that holds the Protobuf contracts."
+  value       = module.schema_registry.registry_name
+}

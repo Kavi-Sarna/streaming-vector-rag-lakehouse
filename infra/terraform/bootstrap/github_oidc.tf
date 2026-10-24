@@ -71,12 +71,37 @@ data "aws_iam_policy_document" "github_deploy" {
     resources = ["${aws_s3_bucket.state.arn}/*"]
   }
 
-  # The demo composition's only resources today are the VPC. Later modules
-  # extend this policy when they add EKS, MSK, and the lakehouse bucket.
+  # The demo composition's resources today are the VPC and the Glue schema
+  # registry. Later modules extend this policy when they add EKS, MSK, and
+  # the lakehouse bucket.
   statement {
     sid       = "Network"
     effect    = "Allow"
     actions   = ["ec2:*"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "SchemaRegistry"
+    effect = "Allow"
+    actions = [
+      "glue:CreateRegistry",
+      "glue:GetRegistry",
+      "glue:UpdateRegistry",
+      "glue:DeleteRegistry",
+      "glue:CreateSchema",
+      "glue:GetSchema",
+      "glue:UpdateSchema",
+      "glue:DeleteSchema",
+      "glue:RegisterSchemaVersion",
+      "glue:GetSchemaVersion",
+      "glue:GetSchemaByDefinition",
+      "glue:ListSchemas",
+      "glue:ListSchemaVersions",
+      "glue:TagResource",
+      "glue:UntagResource",
+      "glue:GetTags",
+    ]
     resources = ["*"]
   }
 }

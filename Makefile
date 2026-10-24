@@ -59,9 +59,9 @@ tf-bootstrap-down: ## Destroy the state bucket and GitHub role. Run tf-network-d
 	terraform -chdir=$(BOOTSTRAP) init -input=false
 	terraform -chdir=$(BOOTSTRAP) destroy
 
-tf-plan-network: backend-hcl ## Plan the VPC. Needs AWS credentials and an applied bootstrap
+tf-plan-network: backend-hcl ## Plan the VPC and Glue schema registry. Needs AWS credentials and an applied bootstrap
 	terraform -chdir=$(DEMO) init -backend-config=backend.hcl -input=false
-	terraform -chdir=$(DEMO) plan -target=module.networking
+	terraform -chdir=$(DEMO) plan -target=module.networking -target=module.schema_registry
 
 docker-up: ## Start the Compose project
 	$(COMPOSE) up -d --wait
