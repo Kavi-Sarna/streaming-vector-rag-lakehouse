@@ -52,7 +52,7 @@ jobs:
         run: |
           terraform init -backend-config=backend.hcl -input=false
           set +e
-          terraform plan -detailed-exitcode -input=false -out=tfplan -target=module.networking -target=module.schema_registry -target=module.ecr -target=module.compute_eks -target=module.msk
+          terraform plan -detailed-exitcode -input=false -out=tfplan -target=module.networking -target=module.schema_registry -target=module.ecr -target=module.compute_eks -target=module.msk -target=module.grafana_access
           code=$?
           set -e
           if [ "$code" -eq 1 ]; then
@@ -118,6 +118,12 @@ jobs:
         run: |
           terraform init -backend-config=backend.hcl -input=false
           terraform apply -input=false tfplan
+          {
+            echo "## Grafana"
+            echo
+            echo "Run \`make open-grafana\`, then open $(terraform output -raw grafana_url)."
+            echo "The load balancer accepts only the address that command adds."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   unblock-deploy:
     name: Unblock deploy

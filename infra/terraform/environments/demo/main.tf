@@ -53,3 +53,13 @@ module "compute_eks" {
   )
   cluster_admin_principal_arns = var.cluster_admin_principal_arns
 }
+
+module "grafana_access" {
+  source = "../../modules/grafana_access"
+
+  name                   = var.name
+  vpc_id                 = module.networking.vpc_id
+  public_subnet_ids      = module.networking.public_subnet_ids
+  node_security_group_id = module.compute_eks.cluster_security_group_id
+  autoscaling_group_name = module.compute_eks.node_group_autoscaling_group_name
+}

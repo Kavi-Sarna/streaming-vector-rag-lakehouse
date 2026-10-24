@@ -72,9 +72,9 @@ data "aws_iam_policy_document" "github_deploy" {
   }
 
   # The demo composition's resources today are the VPC, the Glue schema
-  # registry, the producer ECR repository, MSK Serverless, and the EKS
-  # cluster. Later modules extend this policy when they add the lakehouse
-  # bucket.
+  # registry, the producer ECR repository, MSK Serverless, the EKS
+  # cluster, and the Grafana network load balancer. Later modules extend
+  # this policy when they add the lakehouse bucket.
   statement {
     sid       = "Network"
     effect    = "Allow"
@@ -161,6 +161,51 @@ data "aws_iam_policy_document" "github_deploy" {
       "kafka:ListTagsForResource",
       "kafka:TagResource",
       "kafka:UntagResource",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "GrafanaLoadBalancer"
+    effect = "Allow"
+    actions = [
+      "elasticloadbalancing:CreateLoadBalancer",
+      "elasticloadbalancing:DeleteLoadBalancer",
+      "elasticloadbalancing:DescribeLoadBalancers",
+      "elasticloadbalancing:DescribeLoadBalancerAttributes",
+      "elasticloadbalancing:ModifyLoadBalancerAttributes",
+      "elasticloadbalancing:SetSecurityGroups",
+      "elasticloadbalancing:SetSubnets",
+      "elasticloadbalancing:CreateTargetGroup",
+      "elasticloadbalancing:DeleteTargetGroup",
+      "elasticloadbalancing:DescribeTargetGroups",
+      "elasticloadbalancing:DescribeTargetGroupAttributes",
+      "elasticloadbalancing:ModifyTargetGroup",
+      "elasticloadbalancing:ModifyTargetGroupAttributes",
+      "elasticloadbalancing:CreateListener",
+      "elasticloadbalancing:DeleteListener",
+      "elasticloadbalancing:DescribeListeners",
+      "elasticloadbalancing:DescribeListenerAttributes",
+      "elasticloadbalancing:ModifyListener",
+      "elasticloadbalancing:ModifyListenerAttributes",
+      "elasticloadbalancing:AddTags",
+      "elasticloadbalancing:RemoveTags",
+      "elasticloadbalancing:DescribeTags",
+      "elasticloadbalancing:RegisterTargets",
+      "elasticloadbalancing:DeregisterTargets",
+      "elasticloadbalancing:DescribeTargetHealth",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "GrafanaNodeTargets"
+    effect = "Allow"
+    actions = [
+      "autoscaling:AttachLoadBalancerTargetGroups",
+      "autoscaling:DetachLoadBalancerTargetGroups",
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeLoadBalancerTargetGroups",
     ]
     resources = ["*"]
   }

@@ -5,7 +5,7 @@ COMPOSE := docker compose -f infra/compose/docker-compose.yml
 BOOTSTRAP := infra/terraform/bootstrap
 DEMO := infra/terraform/environments/demo
 
-.PHONY: help lint test ci smoke docker-up docker-down docker-health docker-build-producer terraform proto-gen backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network seed-data seed-data-keps seed-data-arxiv seed-data-hf producer
+.PHONY: help lint test ci smoke docker-up docker-down docker-health docker-build-producer terraform proto-gen backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network kubeconfig open-grafana close-grafana seed-data seed-data-keps seed-data-arxiv seed-data-hf producer
 
 help: ## Show this help
 	@grep -hE '^[a-z0-9-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -47,11 +47,11 @@ tf-bootstrap: ## Create the state bucket and GitHub deploy role
 	terraform -chdir=$(BOOTSTRAP) init -input=false
 	terraform -chdir=$(BOOTSTRAP) apply
 
-tf-network-up: backend-hcl ## Create the VPC, NAT gateway, Glue registry, producer ECR repository, EKS cluster, and MSK Serverless
+tf-network-up: backend-hcl ## Create the VPC, NAT gateway, Glue registry, producer ECR repository, EKS cluster, MSK Serverless, and the Grafana load balancer
 	terraform -chdir=$(DEMO) init -backend-config=backend.hcl -input=false
 	terraform -chdir=$(DEMO) apply
 
-tf-network-down: backend-hcl ## Destroy the demo stack and stop NAT, EKS, and node charges
+tf-network-down: backend-hcl ## Destroy the demo stack and stop NAT, EKS, MSK, load balancer, and node charges
 	terraform -chdir=$(DEMO) init -backend-config=backend.hcl -input=false
 	terraform -chdir=$(DEMO) destroy
 
@@ -59,9 +59,18 @@ tf-bootstrap-down: ## Destroy the state bucket and GitHub role. Run tf-network-d
 	terraform -chdir=$(BOOTSTRAP) init -input=false
 	terraform -chdir=$(BOOTSTRAP) destroy
 
-tf-plan-network: backend-hcl ## Plan the VPC, Glue registry, producer ECR repository, EKS cluster, and MSK Serverless. Needs AWS credentials and an applied bootstrap
+tf-plan-network: backend-hcl ## Plan the VPC, Glue registry, producer ECR repository, EKS cluster, MSK Serverless, and the Grafana load balancer. Needs AWS credentials and an applied bootstrap
 	terraform -chdir=$(DEMO) init -backend-config=backend.hcl -input=false
-	terraform -chdir=$(DEMO) plan -target=module.networking -target=module.schema_registry -target=module.ecr -target=module.compute_eks -target=module.msk
+	terraform -chdir=$(DEMO) plan -target=module.networking -target=module.schema_registry -target=module.ecr -target=module.compute_eks -target=module.msk -target=module.grafana_access
+
+kubeconfig: ## Grant this IAM user kubectl admin on rag-demo and write ~/.kube/config
+	./scripts/kubeconfig.sh
+
+open-grafana: ## Allow this machine's public IP to open the cloud Grafana dashboard
+	./scripts/open-grafana.sh
+
+close-grafana: ## Remove that address from the Grafana load balancer
+	./scripts/open-grafana.sh --close
 
 docker-up: ## Start Redpanda, Silo, Redis, Flink, the mock embedder, Prometheus, and Grafana
 	$(COMPOSE) up -d --wait --build
