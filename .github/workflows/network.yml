@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   plan:
-    name: Plan network
+    name: Plan demo stack
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     outputs:
@@ -52,7 +52,7 @@ jobs:
         run: |
           terraform init -backend-config=backend.hcl -input=false
           set +e
-          terraform plan -detailed-exitcode -input=false -out=tfplan -target=module.networking -target=module.schema_registry
+          terraform plan -detailed-exitcode -input=false -out=tfplan -target=module.networking -target=module.schema_registry -target=module.compute_eks
           code=$?
           set -e
           if [ "$code" -eq 1 ]; then
@@ -66,7 +66,7 @@ jobs:
           fi
           terraform show -no-color tfplan > plan.txt
           {
-            echo "## Network plan"
+            echo "## Demo plan"
             echo
             echo '```'
             cat plan.txt
@@ -82,7 +82,7 @@ jobs:
           retention-days: 1
 
   apply:
-    name: Apply network
+    name: Apply demo stack
     needs: plan
     if: github.event.pull_request.head.repo.full_name == github.repository && needs.plan.outputs.changes == 'true'
     runs-on: ubuntu-latest

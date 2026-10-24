@@ -15,3 +15,9 @@ variable "vpc_cidr" {
   description = "CIDR for the demo VPC."
   default     = "10.0.0.0/16"
 }
+
+variable "cluster_admin_principal_arns" {
+  type        = list(string)
+  description = "Extra IAM principals granted kubectl admin on the EKS cluster. The principal that applies the cluster is already an admin."
+  default     = []
+}
