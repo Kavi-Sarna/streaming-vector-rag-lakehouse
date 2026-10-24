@@ -40,8 +40,11 @@ That builds `rag-lakehouse-producer:local`. The container uses the same defaults
 Approve both `demo` reviews when you want to watch the cloud producer. Run `make tf-bootstrap` first so the GitHub role can create the Grafana load balancer. After Apply and the deploy release succeed, run:
 
 ```sh
+make kubeconfig
 make open-grafana
 ```
+
+`make kubeconfig` grants the IAM user in your current AWS session cluster admin and writes `~/.kube/config`. The cluster API uses IAM access entries, and this command creates that entry before it writes the kubeconfig.
 
 That allows this machine's public IPv4 address and prints the dashboard URL. Grafana opens in the browser with no login. The load balancer accepts only that address. It can take a minute after the deploy job for the load balancer to see Grafana. Run `make open-grafana` again if your address changes. `make close-grafana` removes the rule.
 

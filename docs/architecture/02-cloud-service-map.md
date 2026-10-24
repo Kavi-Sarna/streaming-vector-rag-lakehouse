@@ -29,7 +29,7 @@ Public subnets are tagged for external load balancers. Private subnets are tagge
 
 ## EKS
 
-`modules/compute_eks` creates cluster `rag-demo` on Kubernetes 1.37 in standard support. The API is public, and IAM decides who can call it. The principal that applies the cluster is a cluster admin. `cluster_admin_principal_arns` adds other principals, such as the IAM user on the laptop.
+`modules/compute_eks` creates cluster `rag-demo` on Kubernetes 1.37 in standard support. The API is public, and IAM decides who can call it. The principal that applies the cluster is a cluster admin. `make kubeconfig` grants the IAM user in the current AWS session and writes `~/.kube/config`. `cluster_admin_principal_arns` adds other principals at apply time.
 
 The node group is two on-demand `m6i.large` instances, Amazon Linux 2023, linux/amd64, one in each private subnet. They use the NAT gateway. Minimum, desired, and maximum are all 2, so the group does not scale itself. The cluster OIDC provider is what later service accounts use. The EBS CSI driver is installed with its own role so a later volume can attach. The node role can pull from ECR in this account. Terraform does not start a workload. After Apply, `.github/workflows/deploy.yml` applies the producer, Prometheus, and Grafana from `infra/k8s`.
 

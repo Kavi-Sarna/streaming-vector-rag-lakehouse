@@ -89,7 +89,7 @@ The object store image is `pgsty/silo`. It speaks the MinIO S3 API. The official
 | GitHub `network`          | on a pull request: plan the VPC, Glue registry, producer image repository, EKS cluster, MSK Serverless, and the Grafana load balancer, then print the plan | Not yet |
 | GitHub `network` apply    | only when that plan has changes, after you approve the `demo` environment        | Yes. VPC, one NAT gateway, the Glue registry, the producer image repository, the EKS control plane, two m6i.large nodes, MSK Serverless, and a network load balancer for Grafana |
 | GitHub `deploy`           | after you approve `demo` again for the release. With no plan changes, that is the only gate. With plan changes, it also waits until Apply has succeeded | No new hourly resources. Builds the producer image, pushes it to the repository, and applies the producer, Prometheus, and Grafana |
-| Your laptop               | `make tf-bootstrap` once, `make open-grafana` after the deploy, and `make tf-network-down` when you are finished | Bootstrap once. Destroy removes the VPC, the registry, the image repository, MSK, the Grafana load balancer, and the cluster |
+| Your laptop               | `make tf-bootstrap` once, then `make kubeconfig` and `make open-grafana` after the deploy, and `make tf-network-down` when you are finished | Bootstrap once. Destroy removes the VPC, the registry, the image repository, MSK, the Grafana load balancer, and the cluster |
 
 The NAT gateway is about $0.045 per hour. The EKS control plane is about $0.10 per hour, and the two nodes are about $0.192 per hour together. MSK Serverless is about $0.10 per hour plus a small charge for its one partition and the data written. The Grafana load balancer is about $0.023 per hour plus a small charge for the traffic. Approving a plan that adds them starts those charges. `make tf-network-down` stops them. The shape is in [docs/architecture/02-cloud-service-map.md](docs/architecture/02-cloud-service-map.md).
 
@@ -108,6 +108,17 @@ Then in the GitHub repository settings:
 2. Environments: create `demo` and add yourself as a required reviewer. Apply and the deploy release both wait on this environment. Approving one does not approve the other.
 
 Open the pull request after those exist. The plan is published on the Actions run. When the plan has changes, approve the `demo` deployment to apply it. A plan with no changes skips that approval. Until you approve a plan that has changes, nothing new is created in the VPC. Unblock deploy is the release, and it waits on `demo` too. With an empty plan that approval is the only gate. With a plan that has changes, it waits until Apply has succeeded and then for a second approval of `demo`. Leave it unapproved when you want the producer to stay undeployed.
+
+After Apply and the deploy release, point kubectl at the cluster. The GitHub role that created it is already an admin. `make kubeconfig` grants the IAM user in your current AWS session and writes `~/.kube/config`.
+
+```sh
+make kubeconfig
+kubectl get nodes
+kubectl -n rag get pods
+make open-grafana
+```
+
+`make open-grafana` prints the dashboard URL. `kubectl -n rag port-forward svc/grafana 3000:3000` opens the same dashboard at `http://localhost:3000`. `kubectl delete job producer -n rag` stops the producer.
 
 Bring the network down from the laptop when you are finished. This uses your IAM user, not GitHub:
 

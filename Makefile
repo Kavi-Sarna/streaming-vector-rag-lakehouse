@@ -5,7 +5,7 @@ COMPOSE := docker compose -f infra/compose/docker-compose.yml
 BOOTSTRAP := infra/terraform/bootstrap
 DEMO := infra/terraform/environments/demo
 
-.PHONY: help lint test ci smoke docker-up docker-down docker-health docker-build-producer terraform proto-gen backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network open-grafana close-grafana seed-data seed-data-keps seed-data-arxiv seed-data-hf producer
+.PHONY: help lint test ci smoke docker-up docker-down docker-health docker-build-producer terraform proto-gen backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network kubeconfig open-grafana close-grafana seed-data seed-data-keps seed-data-arxiv seed-data-hf producer
 
 help: ## Show this help
 	@grep -hE '^[a-z0-9-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -62,6 +62,9 @@ tf-bootstrap-down: ## Destroy the state bucket and GitHub role. Run tf-network-d
 tf-plan-network: backend-hcl ## Plan the VPC, Glue registry, producer ECR repository, EKS cluster, MSK Serverless, and the Grafana load balancer. Needs AWS credentials and an applied bootstrap
 	terraform -chdir=$(DEMO) init -backend-config=backend.hcl -input=false
 	terraform -chdir=$(DEMO) plan -target=module.networking -target=module.schema_registry -target=module.ecr -target=module.compute_eks -target=module.msk -target=module.grafana_access
+
+kubeconfig: ## Grant this IAM user kubectl admin on rag-demo and write ~/.kube/config
+	./scripts/kubeconfig.sh
 
 open-grafana: ## Allow this machine's public IP to open the cloud Grafana dashboard
 	./scripts/open-grafana.sh
