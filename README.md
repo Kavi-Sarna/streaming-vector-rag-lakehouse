@@ -19,7 +19,8 @@ Local development uses Go, Apache Flink, Redpanda, Apache Iceberg, Redis Stack, 
 api/     Protobuf contracts.
 go/      Go module. Generated Go stubs live in go/gen/v1.
 flink/   Flink source tree. Generated Java stubs live in flink/src/main/java. The job comes later.
-infra/   Compose, and Terraform for the state bucket and VPC. Kubernetes and Dockerfiles later.
+infra/   Compose for the local stack, and Terraform for the state bucket and VPC. Kubernetes later.
+scripts/ Health checks for that local stack.
 ci/      The checks GitHub Actions runs. `make ci` calls the same scripts.
 docs/    Architecture and walkthroughs.
 ```
@@ -35,7 +36,7 @@ On every pull request and every push to `main`, GitHub Actions installs Go, gola
 - `make lint` runs golangci-lint and checks the Buf workspace.
 - `make test` runs the Go unit tests.
 - `make terraform` checks formatting and runs `terraform validate`. It does not call AWS.
-- `make smoke` starts the placeholder Compose container and removes it.
+- `make smoke` starts the local stack, checks it, and removes it.
 
 A failure reproduces locally with `make ci`. In Actions the Compose step fails if Docker is missing. On a laptop without Docker it is skipped with a warning.
 
@@ -52,7 +53,19 @@ make test
 
 Local records are the raw Protobuf bytes. A cloud record puts an 18-byte Glue header in front of those bytes: version `0x03`, a compression byte, and the schema version id. The demo stack registers `document_event` in the Glue registry `rag-demo`.
 
-`make docker-up` starts that placeholder and leaves it running. `make docker-down` stops it. The local Redpanda, MinIO, Redis Stack, and Flink stack replaces it in a later change.
+## Local stack
+
+`make docker-up` starts the backing services and leaves them running. `make docker-health` checks them from the host. `make docker-down` stops them. No producer, Flink job, or query gateway is submitted.
+
+| Service        | Address                         | What it is                                                                 |
+| -------------- | ------------------------------- | -------------------------------------------------------------------------- |
+| Redpanda       | `localhost:9092`                | Kafka for the host. Flink uses `redpanda:9093` on the Compose network. Topic `document.events.v1`. |
+| Silo           | `localhost:9000`, console `:9001` | MinIO S3 API. User `minio`, password `minio12345`. Bucket `lakehouse`. |
+| Redis Stack    | `localhost:6379`                | Vector index and cache. No password.                                       |
+| Flink          | `http://localhost:8081`         | JobManager and one TaskManager. No job is running.                         |
+| Mock embedder  | `http://localhost:8091/embed`   | `POST {"text":"..."}` returns a deterministic 384-dimension vector.       |
+
+The object store image is `pgsty/silo`. It speaks the MinIO S3 API. The official MinIO image is no longer anonymously pullable.
 
 ## AWS network
 

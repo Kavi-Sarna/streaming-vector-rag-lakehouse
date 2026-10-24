@@ -5,7 +5,7 @@ COMPOSE := docker compose -f infra/compose/docker-compose.yml
 BOOTSTRAP := infra/terraform/bootstrap
 DEMO := infra/terraform/environments/demo
 
-.PHONY: help lint test ci smoke docker-up docker-down terraform proto-gen backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network
+.PHONY: help lint test ci smoke docker-up docker-down docker-health terraform proto-gen backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network
 
 help: ## Show this help
 	@grep -hE '^[a-z0-9-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -63,8 +63,11 @@ tf-plan-network: backend-hcl ## Plan the VPC and Glue schema registry. Needs AWS
 	terraform -chdir=$(DEMO) init -backend-config=backend.hcl -input=false
 	terraform -chdir=$(DEMO) plan -target=module.networking -target=module.schema_registry
 
-docker-up: ## Start the Compose project
-	$(COMPOSE) up -d --wait
+docker-up: ## Start Redpanda, Silo, Redis Stack, Flink, and the mock embedder
+	$(COMPOSE) up -d --wait --build
 
 docker-down: ## Stop the Compose project
 	$(COMPOSE) down --remove-orphans
+
+docker-health: ## Check the local stack from the host
+	./scripts/verify-infra-health.sh
