@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compose smoke. Proves the Compose file starts and stops.
+# Compose smoke. Starts the local stack, checks it from the host, then stops it.
 #
 # CI sets REQUIRE_DOCKER=1 so a missing daemon fails the job. Locally the step
 # is skipped with a warning when Docker is not running, so `make ci` still
@@ -24,3 +24,4 @@ cleanup() { make docker-down >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 make docker-up
+./scripts/verify-infra-health.sh
