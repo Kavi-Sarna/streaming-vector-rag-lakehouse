@@ -5,7 +5,7 @@ COMPOSE := docker compose -f infra/compose/docker-compose.yml
 BOOTSTRAP := infra/terraform/bootstrap
 DEMO := infra/terraform/environments/demo
 
-.PHONY: help lint test ci smoke docker-up docker-down docker-health terraform proto-gen backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network
+.PHONY: help lint test ci smoke docker-up docker-down docker-health terraform proto-gen backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network seed-data seed-data-keps seed-data-arxiv seed-data-hf producer
 
 help: ## Show this help
 	@grep -hE '^[a-z0-9-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -71,3 +71,19 @@ docker-down: ## Stop the Compose project
 
 docker-health: ## Check the local stack from the host
 	./scripts/verify-infra-health.sh
+
+seed-data: seed-data-keps seed-data-arxiv seed-data-hf ## Download KEPs, arXiv abstracts, and HuggingFace articles
+
+seed-data-keps: ## Download 40 Kubernetes KEPs into testdata/keps
+	./scripts/download-seed-docs.sh
+
+seed-data-arxiv: ## Fetch arXiv abstracts into testdata/arxiv
+	@mkdir -p testdata/arxiv
+	curl -fsSL "https://export.arxiv.org/api/query?search_query=cat:cs.CL+OR+cat:cs.DC&start=0&max_results=40" -o testdata/arxiv/feed.xml
+	python3 scripts/fetch-arxiv-seed.py --input testdata/arxiv/feed.xml --output-dir testdata/arxiv
+
+seed-data-hf: ## Export a HuggingFace sample into testdata/hf
+	python3 -W ignore::UserWarning scripts/export-hf-seed.py --dataset ag_news --output-dir testdata/hf
+
+producer: ## Publish CDC events to local Redpanda. Override with ARGS='--sleep-max=400ms --burst=30'
+	cd go && go run ./cmd/producer --input=../testdata $(ARGS)
