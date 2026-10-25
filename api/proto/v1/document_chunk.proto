@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package v1;
+
+import "v1/document_event.proto";
+
+option go_package = "github.com/Kavi-Sarna/streaming-vector-rag-lakehouse/go/gen/v1;v1";
+option java_multiple_files = true;
+option java_outer_classname = "DocumentChunkProto";
+option java_package = "com.sarna.rag.v1";
+
+// DocumentChunk is one structural piece of a DocumentEvent.
+// chunk_index starts at 0 for that document version.
+// A delete is one chunk with empty text.
+message DocumentChunk {
+  string tenant_id = 1;
+  string document_id = 2;
+  int64 version = 3;
+  Operation operation = 4;
+  int32 chunk_index = 5;
+  string heading = 6;
+  string text = 7;
+}

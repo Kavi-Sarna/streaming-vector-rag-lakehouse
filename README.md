@@ -12,13 +12,14 @@ Local development uses Go, Apache Flink, Redpanda, Apache Iceberg, Redis Stack, 
 - Docker Compose v2
 - Terraform 1.16.7
 - GNU make
+- Java 17 and Maven, or Docker. The Flink tests use Docker when Maven is not installed.
 
 ## Layout
 
 ```
 api/     Protobuf contracts.
 go/      Go module. Generated Go stubs live in go/gen/v1.
-flink/   Flink source tree. Generated Java stubs live in flink/src/main/java. The job comes later.
+flink/   Flink job. Generated Java stubs live in flink/src/main/java. `make flink-job` submits it.
 infra/   Compose for the local stack, and Terraform for the state bucket and VPC. Kubernetes later.
 scripts/ Health checks for that local stack.
 ci/      The checks GitHub Actions runs. `make ci` calls the same scripts.
@@ -34,7 +35,7 @@ make ci
 On every pull request and every push to `main`, GitHub Actions installs Go, golangci-lint, Buf, and Terraform, then runs `ci/run.sh`. That script is the whole job:
 
 - `make lint` runs golangci-lint and checks the Buf workspace.
-- `make test` runs the Go unit tests.
+- `make test` runs the Go unit tests and the Flink unit tests.
 - `make terraform` checks formatting and runs `terraform validate`. It does not call AWS.
 - `make smoke` starts the local stack, checks it, and removes it.
 
@@ -42,7 +43,7 @@ A failure reproduces locally with `make ci`. In Actions the Compose step fails i
 
 ## Contracts
 
-`api/proto/v1/document_event.proto` is one CDC change for a markdown document: tenant, document id, version, and insert, update, or delete. `api/proto/v1/rag_service.proto` is `v1.RAGService/StreamQuery`.
+`api/proto/v1/document_event.proto` is one CDC change for a markdown document: tenant, document id, version, and insert, update, or delete. `api/proto/v1/document_chunk.proto` is one structural piece of that event. `api/proto/v1/rag_service.proto` is `v1.RAGService/StreamQuery`.
 
 ```sh
 make proto-gen
@@ -55,13 +56,13 @@ Local records are the raw Protobuf bytes. A cloud record puts an 18-byte Glue he
 
 ## Local stack
 
-`make docker-up` starts the backing services and leaves them running. `make docker-health` checks them from the host. `make docker-down` stops them. No Flink job or query gateway is submitted.
+`make docker-up` starts the backing services and leaves them running. `make docker-health` checks them from the host. `make docker-down` stops them. `make flink-job` submits the dedup job to that Flink cluster. The query gateway is not submitted.
 
 ## CDC producer
 
 `make seed-data` downloads three corpora into `testdata/`: 40 Kubernetes enhancement proposals in `keps/`, 40 arXiv abstracts in `arxiv/`, and 40 HuggingFace `ag_news` articles in `hf/`. The HuggingFace export needs `pip install -r scripts/requirements-seed.txt`. `make seed-data-keps`, `make seed-data-arxiv`, and `make seed-data-hf` refresh one source.
 
-`make producer` publishes 300 `DocumentEvent` records to `document.events.v1` on `localhost:9092`. Redpanda must already be running. It reads every markdown file under `testdata/`. Each record is raw Protobuf, keyed by the path of the file, such as `keps/sig-node_2000-graceful-node-shutdown`. The pause between records is random, from 200ms to 1.5s, so the run lasts about three to seven minutes. Each file is inserted, then updated, and then deleted about one time in five. About one record in five is published again with the same version. That repeat is what the later dedupe step drops. Which files are deleted changes every run. The command prints the seed so the same choices can be repeated with `--seed`. Pass `ARGS='--sleep-min=100ms --sleep-max=400ms --burst=30 --delete-chance=0.3'` to change the pace and the delete share. `--sleep-max=0 --rate=50` publishes at a fixed 50 per second. `--security=aws-msk-iam` and `--glue-schema-version` are the MSK path.
+`make producer` publishes 300 `DocumentEvent` records to `document.events.v1` on `localhost:9092`. Redpanda must already be running. It reads every markdown file under `testdata/`. Each record is raw Protobuf, keyed by the path of the file, such as `keps/sig-node_2000-graceful-node-shutdown`. The pause between records is random, from 200ms to 1.5s, so the run lasts about three to seven minutes. Each file is inserted, then updated, and then deleted about one time in five. About one record in five is published again with the same version. `make flink-job` drops that repeat. An insert and the later update are different versions, so both stay. A version older than the one already applied is dropped too. Which files are deleted changes every run. The command prints the seed so the same choices can be repeated with `--seed`. Pass `ARGS='--sleep-min=100ms --sleep-max=400ms --burst=30 --delete-chance=0.3'` to change the pace and the delete share. `--sleep-max=0 --rate=50` publishes at a fixed 50 per second. `--security=aws-msk-iam` and `--glue-schema-version` are the MSK path.
 
 While it publishes, counts are served at `http://localhost:9095/metrics`. Grafana at `http://localhost:3000` shows insert, update, delete, and the publish rate. After the burst, the process keeps serving those counts until Ctrl+C.
 
@@ -69,15 +70,25 @@ While it publishes, counts are served at `http://localhost:9095/metrics`. Grafan
 
 | Service        | Address                              | What it is                                                                        |
 | -------------- | ------------------------------------ | --------------------------------------------------------------------------------- |
-| Redpanda       | `localhost:9092`                     | Kafka for the host. Flink uses `redpanda:9093` on the Compose network. Topic `document.events.v1`. |
+| Redpanda       | `localhost:9092`                     | Kafka for the host. Flink uses `redpanda:9093` on the Compose network. Topics `document.events.v1` and `document.chunks.v1`. |
 | Silo           | `localhost:9000`, console `:9001`    | MinIO S3 API. User `minio`, password `minio12345`. Bucket `lakehouse`.            |
 | Redis Stack    | `localhost:6379`                     | Vector index and cache. No password.                                              |
-| Flink          | `http://localhost:8081`              | JobManager and one TaskManager. No job is running.                                |
+| Flink          | `http://localhost:8081`              | JobManager and one TaskManager. `make flink-job` submits `dedup-and-chunk`.     |
 | Mock embedder  | `http://localhost:8091/embed`        | `POST {"text":"..."}` returns a deterministic 384-dimension vector.               |
 | Prometheus     | `http://localhost:9090`              | Scrapes the producer on the host at port 9095 every 2 seconds.                    |
 | Grafana        | `http://localhost:3000`              | Producer dashboard. Opens without a login.                                        |
 
 The object store image is `pgsty/silo`. It speaks the MinIO S3 API. The official MinIO image is no longer anonymously pullable.
+
+## Flink dedup and chunking
+
+`make flink-job` builds the job and submits `dedup-and-chunk` to the local JobManager. The job reads raw Protobuf from `document.events.v1`, keys by document id, and stores the highest version it has applied. It writes raw Protobuf `DocumentChunk` records to `document.chunks.v1`. Each kept event is split on markdown headings. A fenced code block stays together, and so does a list. A delete is one chunk with empty text. The steps are in [docs/walkthroughs/03-flink-dedup-and-chunking.md](docs/walkthroughs/03-flink-dedup-and-chunking.md).
+
+```sh
+make docker-up
+make flink-job
+docker compose -f infra/compose/docker-compose.yml logs flink-taskmanager | grep "Chunk emitted"
+```
 
 ## AWS network
 

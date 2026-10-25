@@ -8,3 +8,4 @@ command -v go >/dev/null 2>&1 \
   || { echo "Go 1.27.3 is required (https://go.dev/dl/)" >&2; exit 1; }
 
 ( cd go && go test ./... )
+./scripts/flink-mvn.sh test

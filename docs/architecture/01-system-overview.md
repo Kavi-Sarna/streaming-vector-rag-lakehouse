@@ -45,7 +45,7 @@ A query is embedded, then checked against a Redis semantic cache filtered by ten
 ```
 api/          Protobuf contracts
 go/           Go module: commands and internal packages
-flink/        Flink source tree. Generated Java stubs live here. The job comes with the chunking change
+flink/        Dedup and chunk job. Generated Java stubs live here. `make flink-job` submits it locally
 infra/        Compose, Dockerfiles, Terraform, and Kubernetes manifests
 ci/           Check scripts. Workflows and the Makefile both call these.
 scripts/      Provisioning, seed, and verification scripts
@@ -59,4 +59,4 @@ GitHub Actions and Buildkite files stay at the repository root, because those pr
 
 `make docker-up` starts Redpanda, Silo, Redis Stack, a Flink JobManager and TaskManager, the mock embedder, Prometheus, and Grafana. Silo is the local object store: the official MinIO image is no longer anonymously pullable, and Silo serves the same S3 API. The bucket is `lakehouse`.
 
-The producer, the Flink job, the sinks, and the query gateway are not part of this stack. The producer runs on the host and exposes publish counts on port 9095. Prometheus scrapes that port. Grafana at `http://localhost:3000` shows those counts. The same binary is packaged as an image that downloads the seed corpus during the build. `infra/k8s/` runs it as a Job, with the same event counts and an in-cluster Grafana dashboard. `.github/workflows/deploy.yml` pushes that image to ECR and applies the manifests after the cluster exists. The Job publishes to MSK Serverless with IAM. In AWS, a network load balancer serves that dashboard on port 80. `make open-grafana` allows the public address of the machine that runs it. Flink is running and idle. Redpanda has the topic `document.events.v1`. Host clients use `localhost:9092`. Containers on the Compose network use `redpanda:9093`.
+The producer runs on the host and exposes publish counts on port 9095. Prometheus scrapes that port. Grafana at `http://localhost:3000` shows those counts. The same binary is packaged as an image that downloads the seed corpus during the build. `infra/k8s/` runs it as a Job, with the same event counts and an in-cluster Grafana dashboard. `.github/workflows/deploy.yml` pushes that image to ECR and applies the manifests after the cluster exists. The Job publishes to MSK Serverless with IAM. In AWS, a network load balancer serves that dashboard on port 80. `make open-grafana` allows the public address of the machine that runs it. `make flink-job` submits the local dedup job. It reads `document.events.v1` and writes `document.chunks.v1`. The embedding step, the sinks, and the query gateway are not part of this stack. Host clients use `localhost:9092`. Containers on the Compose network use `redpanda:9093`.
