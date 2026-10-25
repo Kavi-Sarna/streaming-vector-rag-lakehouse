@@ -48,6 +48,9 @@ override.tf.json
 *_override.tf.json
 backend.hcl
 
+# Flink build output
+flink/target/
+
 # Seed corpus downloaded by make seed-data
 testdata/keps/*.md
 testdata/arxiv/*.md
