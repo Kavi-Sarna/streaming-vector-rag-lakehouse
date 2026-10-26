@@ -31,9 +31,13 @@ Public subnets are tagged for external load balancers. Private subnets are tagge
 
 `modules/compute_eks` creates cluster `rag-demo` on Kubernetes 1.37 in standard support. The API is public, and IAM decides who can call it. The principal that applies the cluster is a cluster admin. `make kubeconfig` grants the IAM user in the current AWS session and writes `~/.kube/config`. `cluster_admin_principal_arns` adds other principals at apply time.
 
-The node group is two on-demand `m6i.large` instances, Amazon Linux 2023, linux/amd64, one in each private subnet. They use the NAT gateway. Minimum, desired, and maximum are all 2, so the group does not scale itself. The cluster OIDC provider is what later service accounts use. The EBS CSI driver is installed with its own role so a later volume can attach. The node role can pull from ECR in this account. Terraform does not start a workload. After Apply, `.github/workflows/deploy.yml` applies the producer, Prometheus, and Grafana from `infra/k8s`.
+The node group is two on-demand `m6i.large` instances, Amazon Linux 2023, linux/amd64, one in each private subnet. They use the NAT gateway. Minimum, desired, and maximum are all 2, so the group does not scale itself. The cluster OIDC provider is what later service accounts use. The EBS CSI driver is installed with its own role so a later volume can attach. The node role can pull from ECR in this account. Terraform does not start a workload. After Apply, `.github/workflows/deploy.yml` applies the producer, Prometheus, and Grafana from `infra/k8s`, and installs the Flink Kubernetes Operator.
 
 The control plane is about $0.10 per hour. The two nodes are about $0.192 per hour together. Extended support is not selected. `make tf-network-down` deletes the cluster and the nodes.
+
+## Flink Kubernetes Operator
+
+The deploy job installs the Helm chart `infra/helm/flink-operator` after the cluster exists. That chart bundles Flink Kubernetes Operator `1.16.1`. cert-manager `v1.21.3` is a pre-install hook: the namespace weight is `-20` and the other cert-manager resources are `-10`, so they are ready before the operator creates its webhook certificate. The cert-manager CRDs are in the chart `crds/` directory, which Helm installs before the hooks. The operator Deployment is in namespace `flink-operator`. cert-manager stays in namespace `cert-manager`. `make flink-operator` runs the same install from a laptop that already has `make kubeconfig` and Helm 4.3.1. The dedup job is still submitted only to the local Compose cluster. The operator pods use the existing nodes, so they do not add an hourly AWS charge of their own.
 
 ## MSK Serverless
 
@@ -53,4 +57,4 @@ The load balancer is about $0.023 per hour, plus a small charge for the traffic.
 
 ## Apply and destroy
 
-The commands are in the README. `make terraform` checks formatting and runs `terraform validate` with no AWS account. `make tf-plan-network` plans the network, the Glue registry, the producer repository, this cluster, MSK Serverless, and the Grafana load balancer after `backend.hcl` exists. Apply stays in `.github/workflows/network.yml`. Deploys live in `.github/workflows/deploy.yml`. Unblock deploy waits on the same `demo` environment as Apply. An empty plan does not make it wait for Apply. A plan with changes does. Approving Apply does not approve the release. That file then pushes the image and applies `infra/k8s`. Later deploys are added there.
+The commands are in the README. `make terraform` checks formatting and runs `terraform validate` with no AWS account. `make tf-plan-network` plans the network, the Glue registry, the producer repository, this cluster, MSK Serverless, and the Grafana load balancer after `backend.hcl` exists. Apply stays in `.github/workflows/network.yml`. Deploys live in `.github/workflows/deploy.yml`. Unblock deploy waits on the same `demo` environment as Apply. An empty plan does not make it wait for Apply. A plan with changes does. Approving Apply does not approve the release. That file then pushes the image, applies `infra/k8s`, and installs the Flink Kubernetes Operator.

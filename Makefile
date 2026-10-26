@@ -8,7 +8,7 @@ COMPOSE := docker compose -f infra/compose/docker-compose.yml
 BOOTSTRAP := infra/terraform/bootstrap
 DEMO := infra/terraform/environments/demo
 
-.PHONY: help lint test ci smoke docker-up docker-down docker-health docker-build-producer terraform proto-gen backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network kubeconfig open-grafana close-grafana seed-data seed-data-keps seed-data-arxiv seed-data-hf producer flink-job
+.PHONY: help lint test ci smoke docker-up docker-down docker-health docker-build-producer terraform proto-gen backend-hcl tf-bootstrap tf-network-up tf-network-down tf-bootstrap-down tf-plan-network kubeconfig open-grafana close-grafana seed-data seed-data-keps seed-data-arxiv seed-data-hf producer flink-job flink-operator
 
 help: ## Show this help
 	@grep -hE '^[a-z0-9-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -106,3 +106,10 @@ producer: ## Publish CDC events to local Redpanda. Override with ARGS='--sleep-m
 
 flink-job: ## Build the dedup job and submit it to local Flink
 	./scripts/submit-flink-job.sh
+
+flink-operator: ## Install the Flink operator chart on the current cluster
+	@command -v helm >/dev/null 2>&1 || { echo "Install Helm 4.3.1, then run this again."; exit 1; }
+	@kubectl get ns >/dev/null 2>&1 || { echo "kubectl cannot reach a cluster. Run make kubeconfig after the demo stack exists."; exit 1; }
+	helm upgrade --install flink-operator infra/helm/flink-operator --namespace flink-operator --create-namespace --wait --timeout 5m
+	kubectl -n flink-operator get pods
+	kubectl -n cert-manager get pods

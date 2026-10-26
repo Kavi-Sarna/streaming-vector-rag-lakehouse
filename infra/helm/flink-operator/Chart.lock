@@ -1,0 +1,6 @@
+dependencies:
+- name: flink-kubernetes-operator
+  repository: file://charts/flink-kubernetes-operator
+  version: 1.16.1
+digest: sha256:39ee7b6b0dd104389fb9e6caf437458882e5f0d0e7ba10e8f9d9142a2b4fe75a
+generated: "2026-10-26T10:45:04.51977-04:00"

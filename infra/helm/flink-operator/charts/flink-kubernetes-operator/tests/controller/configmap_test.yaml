@@ -1,0 +1,131 @@
+################################################################################
+#  Licensed to the Apache Software Foundation (ASF) under one
+#  or more contributor license agreements.  See the NOTICE file
+#  distributed with this work for additional information
+#  regarding copyright ownership.  The ASF licenses this file
+#  to you under the Apache License, Version 2.0 (the
+#  "License"); you may not use this file except in compliance
+#  with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+# limitations under the License.
+################################################################################
+
+suite: Test ConfigMap
+
+templates:
+  - controller/configmap.yaml
+
+release:
+  name: flink-operator
+  namespace: flink-operator
+
+tests:
+  - it: Should create a configmap with default configuration if `defaultConfiguration.create` is `true`
+    set:
+      defaultConfiguration:
+        create: true
+    asserts:
+      - containsDocument:
+          apiVersion: v1
+          kind: ConfigMap
+          name: flink-operator-config
+          namespace: flink-operator
+
+  - it: Should include logback-operator.xml key in configmap
+    set:
+      defaultConfiguration:
+        create: true
+    asserts:
+      - isNotNull:
+          path: data["logback-operator.xml"]
+
+  - it: Should include logback-console.xml key in configmap
+    set:
+      defaultConfiguration:
+        create: true
+    asserts:
+      - isNotNull:
+          path: data["logback-console.xml"]
+
+  - it: Should include log4j-operator.properties key in configmap
+    set:
+      defaultConfiguration:
+        create: true
+    asserts:
+      - isNotNull:
+          path: data["log4j-operator.properties"]
+
+  - it: Should include log4j-console.properties key in configmap
+    set:
+      defaultConfiguration:
+        create: true
+    asserts:
+      - isNotNull:
+          path: data["log4j-console.properties"]
+
+  - it: Emits a single config.yaml key with today's effective defaults and no redundant seed keys
+    asserts:
+      - isNotNull:
+          path: data["config.yaml"]
+      - notExists:
+          path: data["flink-conf.yaml"]
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "(?m)^\\s*kubernetes.operator.metrics.reporter.slf4j.factory.class:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "(?m)^\\s*kubernetes.operator.reconcile.interval: 15 s"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "(?m)^\\s*kubernetes.operator.health.probe.enabled: true"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "(?m)^\\s*taskmanager.numberOfTaskSlots:"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "(?m)^\\s*parallelism.default:"
+
+  - it: A user flink-conf.yaml override flows into config.yaml when config.yaml is unset
+    set:
+      defaultConfiguration:
+        flink-conf.yaml: |+
+          kubernetes.operator.reconcile.interval: 99 s
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "reconcile.interval: 99 s"
+
+  - it: When both are set, config.yaml wins and flink-conf.yaml is ignored
+    set:
+      defaultConfiguration:
+        config.yaml: |+
+          kubernetes.operator:
+            reconcile.interval: 30 s
+        flink-conf.yaml: |+
+          kubernetes.operator.reconcile.interval: 99 s
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "reconcile.interval: 30 s"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "reconcile.interval: 99 s"
+
+  - it: A flat config.yaml override of a former seed key is not duplicated (relies on dropping it from the seed)
+    set:
+      defaultConfiguration:
+        config.yaml: |+
+          taskmanager.numberOfTaskSlots: 2
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "taskmanager.numberOfTaskSlots: 2"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "taskmanager.numberOfTaskSlots: 1"

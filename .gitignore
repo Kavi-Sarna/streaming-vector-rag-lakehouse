@@ -51,6 +51,9 @@ backend.hcl
 # Flink build output
 flink/target/
 
+# Packaged copy of the vendored operator chart. The unpacked chart is the source.
+infra/helm/flink-operator/charts/*.tgz
+
 # Seed corpus downloaded by make seed-data
 testdata/keps/*.md
 testdata/arxiv/*.md

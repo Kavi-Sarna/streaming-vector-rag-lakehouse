@@ -13,6 +13,7 @@ Local development uses Go, Apache Flink, Redpanda, Apache Iceberg, Redis Stack, 
 - Terraform 1.16.7
 - GNU make
 - Java 17 and Maven, or Docker. The Flink tests use Docker when Maven is not installed.
+- Helm 4.3.1, for `make flink-operator`
 
 ## Layout
 
@@ -20,7 +21,7 @@ Local development uses Go, Apache Flink, Redpanda, Apache Iceberg, Redis Stack, 
 api/     Protobuf contracts.
 go/      Go module. Generated Go stubs live in go/gen/v1.
 flink/   Flink job. Generated Java stubs live in flink/src/main/java. `make flink-job` submits it.
-infra/   Compose for the local stack, and Terraform for the state bucket and VPC. Kubernetes later.
+infra/   Compose for the local stack, Terraform for the state bucket and VPC, Kubernetes manifests, and the Flink operator Helm chart.
 scripts/ Health checks for that local stack.
 ci/      The checks GitHub Actions runs. `make ci` calls the same scripts.
 docs/    Architecture and walkthroughs.
@@ -90,6 +91,18 @@ make flink-job
 docker compose -f infra/compose/docker-compose.yml logs flink-taskmanager | grep "Chunk emitted"
 ```
 
+## Flink Kubernetes Operator
+
+The operator runs on the EKS cluster, in namespace `flink-operator`. The chart is `infra/helm/flink-operator`. cert-manager is a pre-install hook in that chart: the namespace is weight `-20` and the other cert-manager resources are weight `-10`, so they are ready before the operator chart creates its webhook certificate. cert-manager stays in namespace `cert-manager`. `.github/workflows/deploy.yml` installs the chart after the cluster exists. From the laptop, `make kubeconfig` and then `make flink-operator` do the same install. The steps are in [docs/walkthroughs/04-flink-kubernetes-operator.md](docs/walkthroughs/04-flink-kubernetes-operator.md).
+
+```sh
+make kubeconfig
+make flink-operator
+kubectl get pods -n flink-operator
+```
+
+`make flink-job` still submits `dedup-and-chunk` to the local Compose cluster. The operator does not run that job yet.
+
 ## AWS network
 
 `ci` never calls AWS. `network` plans and applies the demo stack, and only after the one-time bootstrap below exists. `deploy` pushes images and applies Kubernetes manifests. When the plan has no changes, Unblock deploy is its own approval. When the plan has changes, that approval waits until Apply has succeeded.
@@ -99,8 +112,8 @@ docker compose -f infra/compose/docker-compose.yml logs flink-taskmanager | grep
 | GitHub `ci`               | lint, unit tests, `terraform validate`, Compose smoke                            | No                                        |
 | GitHub `network`          | on a pull request: plan the VPC, Glue registry, producer image repository, EKS cluster, MSK Serverless, and the Grafana load balancer, then print the plan | Not yet |
 | GitHub `network` apply    | only when that plan has changes, after you approve the `demo` environment        | Yes. VPC, one NAT gateway, the Glue registry, the producer image repository, the EKS control plane, two m6i.large nodes, MSK Serverless, and a network load balancer for Grafana |
-| GitHub `deploy`           | after you approve `demo` again for the release. With no plan changes, that is the only gate. With plan changes, it also waits until Apply has succeeded | No new hourly resources. Builds the producer image, pushes it to the repository, and applies the producer, Prometheus, and Grafana |
-| Your laptop               | `make tf-bootstrap` once, then `make kubeconfig` and `make open-grafana` after the deploy, and `make tf-network-down` when you are finished | Bootstrap once. Destroy removes the VPC, the registry, the image repository, MSK, the Grafana load balancer, and the cluster |
+| GitHub `deploy`           | after you approve `demo` again for the release. With no plan changes, that is the only gate. With plan changes, it also waits until Apply has succeeded | No new hourly resources. Builds the producer image, pushes it to the repository, applies the producer, Prometheus, and Grafana, and installs the Flink Kubernetes Operator |
+| Your laptop               | `make tf-bootstrap` once, then `make kubeconfig`, `make flink-operator`, and `make open-grafana` after the deploy, and `make tf-network-down` when you are finished | Bootstrap once. Destroy removes the VPC, the registry, the image repository, MSK, the Grafana load balancer, and the cluster |
 
 The NAT gateway is about $0.045 per hour. The EKS control plane is about $0.10 per hour, and the two nodes are about $0.192 per hour together. MSK Serverless is about $0.10 per hour plus a small charge for its one partition and the data written. The Grafana load balancer is about $0.023 per hour plus a small charge for the traffic. Approving a plan that adds them starts those charges. `make tf-network-down` stops them. The shape is in [docs/architecture/02-cloud-service-map.md](docs/architecture/02-cloud-service-map.md).
 
