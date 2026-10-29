@@ -9,6 +9,8 @@ compose=(docker compose -f infra/compose/docker-compose.yml)
 
 "${compose[@]}" exec -T redpanda rpk topic describe document.chunks.v1 -X brokers=127.0.0.1:9093 >/dev/null 2>&1 \
   || "${compose[@]}" exec -T redpanda rpk topic create document.chunks.v1 -p 1 -r 1 -X brokers=127.0.0.1:9093
+"${compose[@]}" exec -T redpanda rpk topic describe document.embeddings.v1 -X brokers=127.0.0.1:9093 >/dev/null 2>&1 \
+  || "${compose[@]}" exec -T redpanda rpk topic create document.embeddings.v1 -p 1 -r 1 -X brokers=127.0.0.1:9093
 
 python3 - <<'PY'
 import json
@@ -30,5 +32,5 @@ for job in overview.get("jobs") or []:
 PY
 
 "${compose[@]}" cp flink/target/dedup-job.jar flink-jobmanager:/tmp/dedup-job.jar
-"${compose[@]}" exec -T flink-jobmanager flink run -d /tmp/dedup-job.jar --brokers redpanda:9093
-echo "dedup-and-chunk submitted. Chunk lines are in the taskmanager log."
+"${compose[@]}" exec -T flink-jobmanager flink run -d /tmp/dedup-job.jar --brokers redpanda:9093 --embed-url http://mock-embedder:8080/embed
+echo "dedup-and-chunk submitted. Embedding lines are in the taskmanager log."

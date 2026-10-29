@@ -44,7 +44,7 @@ A failure reproduces locally with `make ci`. In Actions the Compose step fails i
 
 ## Contracts
 
-`api/proto/v1/document_event.proto` is one CDC change for a markdown document: tenant, document id, version, and insert, update, or delete. `api/proto/v1/document_chunk.proto` is one structural piece of that event. `api/proto/v1/rag_service.proto` is `v1.RAGService/StreamQuery`.
+`api/proto/v1/document_event.proto` is one CDC change for a markdown document: tenant, document id, version, and insert, update, or delete. `api/proto/v1/document_chunk.proto` is one structural piece of that event. `api/proto/v1/document_embedding.proto` is that chunk plus the accepted vector. `api/proto/v1/rag_service.proto` is `v1.RAGService/StreamQuery`.
 
 ```sh
 make proto-gen
@@ -71,7 +71,7 @@ While it publishes, counts are served at `http://localhost:9095/metrics`. Grafan
 
 | Service        | Address                              | What it is                                                                        |
 | -------------- | ------------------------------------ | --------------------------------------------------------------------------------- |
-| Redpanda       | `localhost:9092`                     | Kafka for the host. Flink uses `redpanda:9093` on the Compose network. Topics `document.events.v1` and `document.chunks.v1`. |
+| Redpanda       | `localhost:9092`                     | Kafka for the host. Flink uses `redpanda:9093` on the Compose network. Topics `document.events.v1`, `document.chunks.v1`, and `document.embeddings.v1`. |
 | Silo           | `localhost:9000`, console `:9001`    | MinIO S3 API. User `minio`, password `minio12345`. Bucket `lakehouse`.            |
 | Redis Stack    | `localhost:6379`                     | Vector index and cache. No password.                                              |
 | Flink          | `http://localhost:8081`              | JobManager and one TaskManager. `make flink-job` submits `dedup-and-chunk`.     |
@@ -89,6 +89,15 @@ The object store image is `pgsty/silo`. It speaks the MinIO S3 API. The official
 make docker-up
 make flink-job
 docker compose -f infra/compose/docker-compose.yml logs flink-taskmanager | grep "Chunk emitted"
+```
+
+## Async embeddings
+
+The same local job embeds each kept chunk that has text. The mock embedder at `http://mock-embedder:8080/embed` returns a 384-dimension vector. Calls finish out of order, and a vector for an older version of that document is dropped. Accepted records are raw Protobuf on `document.embeddings.v1`. A delete is stored with an empty vector. The steps are in [docs/walkthroughs/05-async-embedding.md](docs/walkthroughs/05-async-embedding.md).
+
+```sh
+make flink-job
+docker compose -f infra/compose/docker-compose.yml logs flink-taskmanager | grep "Vector embedded successfully"
 ```
 
 ## Flink Kubernetes Operator
