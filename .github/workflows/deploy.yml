@@ -37,6 +37,15 @@ jobs:
           sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
           kubectl version --client
 
+      - name: Install Helm
+        run: |
+          curl -fsSL -o /tmp/helm.tar.gz https://get.helm.sh/helm-v4.3.1-linux-amd64.tar.gz
+          curl -fsSL -o /tmp/helm.tar.gz.sha256 https://get.helm.sh/helm-v4.3.1-linux-amd64.tar.gz.sha256
+          echo "$(awk '{print $1}' /tmp/helm.tar.gz.sha256)  /tmp/helm.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/helm.tar.gz -C /tmp
+          sudo install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+          helm version
+
       - name: Point the manifests at this image, Glue, and MSK
         env:
           ECR_IMAGE_NAME: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/rag-demo-producer
@@ -106,6 +115,13 @@ jobs:
           echo "Producer brokers: $brokers"
           echo "Producer role: $role_arn"
 
+      - name: Install the Flink Kubernetes Operator
+        run: |
+          aws eks update-kubeconfig --name rag-demo --region us-east-1
+          helm upgrade --install flink-operator infra/helm/flink-operator \
+            --namespace flink-operator --create-namespace \
+            --wait --timeout 5m
+
       - name: Apply the producer and its dashboard
         run: |
           aws eks update-kubeconfig --name rag-demo --region us-east-1
@@ -127,4 +143,5 @@ jobs:
             fi
             echo "\`kubectl -n rag port-forward svc/grafana 3000:3000\` still opens the dashboard at http://localhost:3000."
             echo "\`kubectl delete job producer -n rag\` stops the producer."
+            echo "The Flink Kubernetes Operator is in namespace \`flink-operator\`. \`kubectl -n flink-operator get pods\` shows it. cert-manager is in namespace \`cert-manager\`."
           } >> "$GITHUB_STEP_SUMMARY"
