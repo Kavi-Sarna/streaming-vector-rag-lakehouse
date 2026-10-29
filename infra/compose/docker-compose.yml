@@ -31,7 +31,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - rpk cluster health && { rpk topic describe document.events.v1 -X brokers=127.0.0.1:9093 >/dev/null 2>&1 || rpk topic create document.events.v1 -p 1 -r 1 -X brokers=127.0.0.1:9093; } && { rpk topic describe document.chunks.v1 -X brokers=127.0.0.1:9093 >/dev/null 2>&1 || rpk topic create document.chunks.v1 -p 1 -r 1 -X brokers=127.0.0.1:9093; }
+        - rpk cluster health && { rpk topic describe document.events.v1 -X brokers=127.0.0.1:9093 >/dev/null 2>&1 || rpk topic create document.events.v1 -p 1 -r 1 -X brokers=127.0.0.1:9093; } && { rpk topic describe document.chunks.v1 -X brokers=127.0.0.1:9093 >/dev/null 2>&1 || rpk topic create document.chunks.v1 -p 1 -r 1 -X brokers=127.0.0.1:9093; } && { rpk topic describe document.embeddings.v1 -X brokers=127.0.0.1:9093 >/dev/null 2>&1 || rpk topic create document.embeddings.v1 -p 1 -r 1 -X brokers=127.0.0.1:9093; }
       interval: 5s
       timeout: 15s
       retries: 30

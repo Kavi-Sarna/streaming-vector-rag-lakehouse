@@ -1,15 +1,18 @@
 package com.sarna.rag.flink;
 
 import com.sarna.rag.v1.DocumentChunk;
+import com.sarna.rag.v1.DocumentEmbedding;
 import com.sarna.rag.v1.DocumentEvent;
 import java.util.Arrays;
+import java.util.concurrent.TimeUnit;
 import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
+import org.apache.flink.streaming.api.datastream.AsyncDataStream;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
-/** Reads document.events.v1, drops a version already applied, and writes document.chunks.v1. */
+/** Reads document.events.v1, drops a stale version, chunks markdown, and embeds the kept chunks. */
 public final class DedupJob {
   static final String JOB_NAME = "dedup-and-chunk";
 
@@ -19,6 +22,8 @@ public final class DedupJob {
     String brokers = arg(args, "--brokers", "redpanda:9093");
     String inputTopic = arg(args, "--input-topic", "document.events.v1");
     String outputTopic = arg(args, "--output-topic", "document.chunks.v1");
+    String embeddingTopic = arg(args, "--embedding-topic", "document.embeddings.v1");
+    String embedUrl = arg(args, "--embed-url", "http://mock-embedder:8080/embed");
     String groupId = arg(args, "--group-id", "rag-flink-dedup");
 
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -54,6 +59,34 @@ public final class DedupJob {
             .setRecordSerializer(new ChunkRecordSerializer(outputTopic))
             .build();
     chunks.sinkTo(sink).uid("document-chunks").name("document-chunks");
+
+    DataStream<DocumentEmbedding> embeddings =
+        AsyncDataStream.unorderedWait(
+                chunks
+                    .keyBy(DocumentChunk::getDocumentId)
+                    .process(new EmbeddingDispatch())
+                    .uid("embed-dispatch")
+                    .name("embed-dispatch"),
+                new EmbedFunction(embedUrl),
+                5,
+                TimeUnit.SECONDS,
+                16)
+            .uid("embed")
+            .name("embed")
+            .keyBy(DocumentEmbedding::getDocumentId)
+            .process(new EmbeddingAccept())
+            .uid("embed-accept")
+            .name("embed-accept")
+            .map(new EmbeddingLog())
+            .uid("embed-log")
+            .name("embed-log");
+
+    KafkaSink<DocumentEmbedding> embeddingSink =
+        KafkaSink.<DocumentEmbedding>builder()
+            .setBootstrapServers(brokers)
+            .setRecordSerializer(new EmbeddingRecordSerializer(embeddingTopic))
+            .build();
+    embeddings.sinkTo(embeddingSink).uid("document-embeddings").name("document-embeddings");
 
     env.execute(JOB_NAME);
   }

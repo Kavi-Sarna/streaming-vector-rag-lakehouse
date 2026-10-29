@@ -8,10 +8,11 @@ compose=(docker compose -f infra/compose/docker-compose.yml)
 "${compose[@]}" exec -T redpanda rpk cluster health
 "${compose[@]}" exec -T redpanda rpk topic describe document.events.v1 -X brokers=127.0.0.1:9093 >/dev/null
 "${compose[@]}" exec -T redpanda rpk topic describe document.chunks.v1 -X brokers=127.0.0.1:9093 >/dev/null
+"${compose[@]}" exec -T redpanda rpk topic describe document.embeddings.v1 -X brokers=127.0.0.1:9093 >/dev/null
 python3 - <<'PY'
 import socket
 socket.create_connection(("127.0.0.1", 9092), 5).close()
-print("ok: redpanda localhost:9092 and topics document.events.v1, document.chunks.v1")
+print("ok: redpanda localhost:9092 and topics document.events.v1, document.chunks.v1, document.embeddings.v1")
 PY
 
 curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null
