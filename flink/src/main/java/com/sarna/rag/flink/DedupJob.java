@@ -23,7 +23,9 @@ public final class DedupJob {
     String inputTopic = arg(args, "--input-topic", "document.events.v1");
     String outputTopic = arg(args, "--output-topic", "document.chunks.v1");
     String embeddingTopic = arg(args, "--embedding-topic", "document.embeddings.v1");
+    String embedder = arg(args, "--embedder", "mock");
     String embedUrl = arg(args, "--embed-url", "http://mock-embedder:8080/embed");
+    String bedrockRegion = arg(args, "--bedrock-region", "us-east-1");
     String groupId = arg(args, "--group-id", "rag-flink-dedup");
 
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -67,7 +69,7 @@ public final class DedupJob {
                     .process(new EmbeddingDispatch())
                     .uid("embed-dispatch")
                     .name("embed-dispatch"),
-                new EmbedFunction(embedUrl),
+                new EmbedFunction(embedder, embedUrl, bedrockRegion),
                 5,
                 TimeUnit.SECONDS,
                 16)

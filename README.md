@@ -100,6 +100,10 @@ make flink-job
 docker compose -f infra/compose/docker-compose.yml logs flink-taskmanager | grep "Vector embedded successfully"
 ```
 
+## Bedrock Titan embeddings
+
+The same job can call Titan Text Embeddings V2 instead of the mock. The request asks for 1024 dimensions with normalization on. The model id is `amazon.titan-embed-text-v2:0`. `make flink-job` stays on the mock embedder, so a local run does not call Bedrock. A task with AWS credentials selects Titan with `--embedder=bedrock`. The steps are in [docs/walkthroughs/06-bedrock-titan-embeddings.md](docs/walkthroughs/06-bedrock-titan-embeddings.md).
+
 ## Flink Kubernetes Operator
 
 The operator runs on the EKS cluster, in namespace `flink-operator`. The chart is `infra/helm/flink-operator`. cert-manager is a pre-install hook in that chart: the namespace is weight `-20` and the other cert-manager resources are weight `-10`, so they are ready before the operator chart creates its webhook certificate. cert-manager stays in namespace `cert-manager`. `.github/workflows/deploy.yml` installs the chart after the cluster exists. From the laptop, `make kubeconfig` and then `make flink-operator` do the same install. The steps are in [docs/walkthroughs/04-flink-kubernetes-operator.md](docs/walkthroughs/04-flink-kubernetes-operator.md).
