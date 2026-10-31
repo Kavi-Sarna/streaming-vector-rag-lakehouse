@@ -32,5 +32,10 @@ for job in overview.get("jobs") or []:
 PY
 
 "${compose[@]}" cp flink/target/dedup-job.jar flink-jobmanager:/tmp/dedup-job.jar
-"${compose[@]}" exec -T flink-jobmanager flink run -d /tmp/dedup-job.jar --brokers redpanda:9093 --embed-url http://mock-embedder:8080/embed
-echo "dedup-and-chunk submitted. Embedding lines are in the taskmanager log."
+"${compose[@]}" exec -T flink-jobmanager flink run -d /tmp/dedup-job.jar \
+  --brokers redpanda:9093 \
+  --embed-url http://mock-embedder:8080/embed \
+  --redis-host redis \
+  --iceberg-warehouse s3://lakehouse/warehouse \
+  --s3-endpoint http://minio:9000
+echo "dedup-and-chunk submitted. Redis lines are in the taskmanager log. Iceberg commits on the next checkpoint."
