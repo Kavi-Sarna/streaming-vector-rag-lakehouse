@@ -73,7 +73,7 @@ While it publishes, counts are served at `http://localhost:9095/metrics`. Grafan
 | -------------- | ------------------------------------ | --------------------------------------------------------------------------------- |
 | Redpanda       | `localhost:9092`                     | Kafka for the host. Flink uses `redpanda:9093` on the Compose network. Topics `document.events.v1`, `document.chunks.v1`, and `document.embeddings.v1`. |
 | Silo           | `localhost:9000`, console `:9001`    | MinIO S3 API. User `minio`, password `minio12345`. Bucket `lakehouse`.            |
-| Redis Stack    | `localhost:6379`                     | Vector index and cache. No password.                                              |
+| Redis Stack    | `localhost:6379`                     | Chunk hashes at `tenant:document:chunk`. No password.                            |
 | Flink          | `http://localhost:8081`              | JobManager and one TaskManager. `make flink-job` submits `dedup-and-chunk`.     |
 | Mock embedder  | `http://localhost:8091/embed`        | `POST {"text":"..."}` returns a deterministic 384-dimension vector.               |
 | Prometheus     | `http://localhost:9090`              | Scrapes the producer on the host at port 9095 every 2 seconds.                    |
@@ -103,6 +103,14 @@ docker compose -f infra/compose/docker-compose.yml logs flink-taskmanager | grep
 ## Bedrock Titan embeddings
 
 The same job can call Titan Text Embeddings V2 instead of the mock. The request asks for 1024 dimensions with normalization on. The model id is `amazon.titan-embed-text-v2:0`. `make flink-job` stays on the mock embedder, so a local run does not call Bedrock. A task with AWS credentials selects Titan with `--embedder=bedrock`. The steps are in [docs/walkthroughs/06-bedrock-titan-embeddings.md](docs/walkthroughs/06-bedrock-titan-embeddings.md).
+
+## Iceberg and Redis
+
+Accepted embeddings are written to Iceberg and Redis Stack as well as `document.embeddings.v1`. The Iceberg table is `rag.document_embeddings` in the Silo bucket `lakehouse`. A newer row for the same tenant, document, and chunk replaces the old one, and a delete writes an equality tombstone. Redis stores each chunk at `tenant:document:chunk`. A Lua script writes that hash when the incoming version is at least the version already stored. The steps are in [docs/walkthroughs/07-iceberg-and-redis-dual-sink.md](docs/walkthroughs/07-iceberg-and-redis-dual-sink.md).
+
+```sh
+python3 scripts/verify-dual-sink.py --tenant=tenant-alpha
+```
 
 ## Flink Kubernetes Operator
 

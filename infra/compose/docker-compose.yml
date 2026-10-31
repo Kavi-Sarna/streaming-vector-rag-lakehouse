@@ -72,13 +72,17 @@ services:
 
   flink-jobmanager:
     image: docker.io/library/flink:1.20.5-scala_2.12-java17
+    entrypoint: ["/bin/bash", "/opt/rag/flink-entrypoint.sh"]
     command: jobmanager
     ports:
       - "8081:8081"
+    volumes:
+      - ./flink-entrypoint.sh:/opt/rag/flink-entrypoint.sh:ro
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
-        jobmanager.memory.process.size: 768m
+        jobmanager.memory.process.size: 1600m
+        jobmanager.memory.jvm-metaspace.size: 384m
         taskmanager.numberOfTaskSlots: 2
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8081'"]
@@ -89,14 +93,18 @@ services:
 
   flink-taskmanager:
     image: docker.io/library/flink:1.20.5-scala_2.12-java17
+    entrypoint: ["/bin/bash", "/opt/rag/flink-entrypoint.sh"]
     command: taskmanager
+    volumes:
+      - ./flink-entrypoint.sh:/opt/rag/flink-entrypoint.sh:ro
     depends_on:
       flink-jobmanager:
         condition: service_healthy
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
-        taskmanager.memory.process.size: 1024m
+        taskmanager.memory.process.size: 2048m
+        taskmanager.memory.jvm-metaspace.size: 384m
         taskmanager.numberOfTaskSlots: 2
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/flink-jobmanager/6123'"]

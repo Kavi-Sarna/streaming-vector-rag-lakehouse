@@ -11,8 +11,11 @@ import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsIni
 import org.apache.flink.streaming.api.datastream.AsyncDataStream;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.table.data.RowData;
+import org.apache.iceberg.flink.TableLoader;
+import org.apache.iceberg.flink.sink.FlinkSink;
 
-/** Reads document.events.v1, drops a stale version, chunks markdown, and embeds the kept chunks. */
+/** Reads document.events.v1, drops a stale version, chunks markdown, embeds the kept chunks, and writes Iceberg and Redis. */
 public final class DedupJob {
   static final String JOB_NAME = "dedup-and-chunk";
 
@@ -27,6 +30,13 @@ public final class DedupJob {
     String embedUrl = arg(args, "--embed-url", "http://mock-embedder:8080/embed");
     String bedrockRegion = arg(args, "--bedrock-region", "us-east-1");
     String groupId = arg(args, "--group-id", "rag-flink-dedup");
+    String redisHost = arg(args, "--redis-host", "redis");
+    int redisPort = Integer.parseInt(arg(args, "--redis-port", "6379"));
+    String warehouse = arg(args, "--iceberg-warehouse", "s3://lakehouse/warehouse");
+    String s3Endpoint = arg(args, "--s3-endpoint", "http://minio:9000");
+    String s3AccessKey = arg(args, "--s3-access-key", "minio");
+    String s3SecretKey = arg(args, "--s3-secret-key", "minio12345");
+    String s3Region = arg(args, "--s3-region", "us-east-1");
 
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
     env.setParallelism(1);
@@ -89,6 +99,28 @@ public final class DedupJob {
             .setRecordSerializer(new EmbeddingRecordSerializer(embeddingTopic))
             .build();
     embeddings.sinkTo(embeddingSink).uid("document-embeddings").name("document-embeddings");
+
+    DataStream<DocumentEmbedding> stored =
+        embeddings
+            .keyBy(DocumentEmbedding::getDocumentId)
+            .process(new EmbeddingSinkPrepare())
+            .uid("sink-prepare")
+            .name("sink-prepare");
+
+    TableLoader tableLoader =
+        IcebergTables.ensure(warehouse, s3Endpoint, s3AccessKey, s3SecretKey, s3Region);
+    DataStream<RowData> rows = stored.map(new EmbeddingRow()).uid("iceberg-row").name("iceberg-row");
+    FlinkSink.forRowData(rows)
+        .tableLoader(tableLoader)
+        .upsert(true)
+        .equalityFieldColumns(EmbeddingRow.EQUALITY_FIELDS)
+        .uidPrefix("iceberg-embeddings")
+        .append();
+
+    stored
+        .addSink(new RedisVectorSink(redisHost, redisPort))
+        .uid("redis-vectors")
+        .name("redis-vectors");
 
     env.execute(JOB_NAME);
   }
