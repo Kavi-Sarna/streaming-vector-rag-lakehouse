@@ -10,11 +10,23 @@ import org.apache.flink.streaming.api.functions.async.RichAsyncFunction;
 
 /** Calls the embedder without waiting in the main task thread. An empty chunk skips the call. */
 public final class EmbedFunction extends RichAsyncFunction<DocumentChunk, DocumentEmbedding> {
+  private final String embedder;
   private final String endpoint;
-  private transient EmbedClient client;
+  private final String region;
+  private transient VectorEmbedder client;
 
-  EmbedFunction(String endpoint) {
+  EmbedFunction(String embedder, String endpoint, String region) {
+    this.embedder = embedder;
     this.endpoint = endpoint;
+    this.region = region;
+  }
+
+  static VectorEmbedder openEmbedder(String embedder, String endpoint, String region) {
+    return switch (embedder) {
+      case "mock" -> EmbedClient.create(endpoint);
+      case "bedrock" -> TitanEmbedder.create(region);
+      default -> throw new IllegalArgumentException("--embedder must be mock or bedrock");
+    };
   }
 
   static boolean needsEmbed(String text) {
@@ -23,7 +35,7 @@ public final class EmbedFunction extends RichAsyncFunction<DocumentChunk, Docume
 
   @Override
   public void open(OpenContext openContext) {
-    client = EmbedClient.create(endpoint);
+    client = openEmbedder(embedder, endpoint, region);
   }
 
   @Override

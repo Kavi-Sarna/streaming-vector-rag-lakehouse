@@ -14,4 +14,4 @@ make producer ARGS='--sleep-max=0 --burst=20 --seed=1'
 docker compose -f infra/compose/docker-compose.yml logs flink-taskmanager | grep "Vector embedded successfully"
 ```
 
-Three failures in a row open the embedder circuit for five seconds. The next failure after that cooldown opens it again. Bedrock is not called from this job.
+Three failures in a row open the embedder circuit for five seconds. The next failure after that cooldown opens it again. `make flink-job` uses the mock embedder. Titan is selected with `--embedder=bedrock`, as described in [docs/walkthroughs/06-bedrock-titan-embeddings.md](docs/walkthroughs/06-bedrock-titan-embeddings.md).

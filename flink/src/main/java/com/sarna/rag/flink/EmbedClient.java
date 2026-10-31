@@ -9,7 +9,7 @@ import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 
 /** POSTs chunk text to the mock embedder and parses the returned vector. */
-public final class EmbedClient {
+public final class EmbedClient implements VectorEmbedder {
   private final HttpClient http;
   private final URI endpoint;
   private final EmbedCircuit circuit;
@@ -28,7 +28,8 @@ public final class EmbedClient {
     return new EmbedClient(http, URI.create(endpoint), new EmbedCircuit(3, 5_000), System::currentTimeMillis);
   }
 
-  CompletableFuture<float[]> embed(String text) {
+  @Override
+  public CompletableFuture<float[]> embed(String text) {
     long now = clock.millis();
     if (!circuit.allow(now)) {
       return CompletableFuture.failedFuture(new IOException("embedder circuit open"));
@@ -57,8 +58,11 @@ public final class EmbedClient {
   }
 
   static String jsonText(String text) {
-    StringBuilder out = new StringBuilder(text.length() + 16);
-    out.append("{\"text\":\"");
+    return "{\"text\":\"" + escapeJson(text) + "\"}";
+  }
+
+  static String escapeJson(String text) {
+    StringBuilder out = new StringBuilder(text.length());
     for (int i = 0; i < text.length(); i++) {
       char c = text.charAt(i);
       switch (c) {
@@ -76,7 +80,6 @@ public final class EmbedClient {
         }
       }
     }
-    out.append("\"}");
     return out.toString();
   }
 
